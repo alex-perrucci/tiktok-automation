@@ -4,7 +4,7 @@ import google.generativeai as genai
 
 # 1. Configurazione API Gemini
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-3-flash-preview')
 
 RSS_URL = "https://www.google.it/alerts/feeds/01389272250505533510/7146043719198930595"
 LOG_FILE = "processed_links.txt"
