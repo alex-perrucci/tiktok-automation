@@ -10,6 +10,7 @@ from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVide
 import PIL.Image
 if not hasattr(PIL.Image, 'ANTIALIAS'):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
+from moviepy.audio.fx.all import audio_loop, volumex
 
 # --- CONFIGURAZIONI ---
 # Il nuovo SDK pesca in automatico la variabile d'ambiente GEMINI_API_KEY
@@ -65,19 +66,19 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
 
     # --- NOVITÀ: MIXAGGIO MUSICA DI SOTTOFONDO ---
     try:
-        # Carica la musica che hai messo su GitHub
+        print("Provo a caricare la musica di sottofondo...")
         bg_music = AudioFileClip("bg_music.mp3")
-        
-        # Se la musica è più corta della voce, la fa ripartire in loop
-        bg_music = bg_music.loop(duration=voice_audio.duration)
-        
-        # ABBASSA IL VOLUME al 15% per non coprire la voce
-        bg_music = bg_music.volumex(0.15)
-        
-        # Mixa la voce narrante e la musica
+
+        # Uso le funzioni fx specifiche per l'audio
+        bg_music = audio_loop(bg_music, duration=voice_audio.duration)
+        bg_music = volumex(bg_music, 0.15)
+
         final_audio = CompositeAudioClip([voice_audio, bg_music])
+        print("Musica mixata con successo!")
+
     except Exception as e:
-        print("File bg_music.mp3 non trovato, uso solo la voce.")
+        # Ora se fallisce, ci dirà ESATTAMENTE perché!
+        print(f"ATTENZIONE: Impossibile usare la musica. Errore reale: {e}")
         final_audio = voice_audio
 
     # 2. Loop o Taglio del video di sfondo in base all'audio finale
