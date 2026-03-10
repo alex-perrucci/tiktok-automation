@@ -6,7 +6,10 @@ import requests
 import feedparser
 from google import genai  # <-- Il nuovo SDK ufficiale
 import edge_tts
-from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, CompositeAudioClip
+import PIL.Image
+if not hasattr(PIL.Image, 'ANTIALIAS'):
+    PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
 
 # --- CONFIGURAZIONI ---
 # Il nuovo SDK pesca in automatico la variabile d'ambiente GEMINI_API_KEY
@@ -55,23 +58,102 @@ def download_pexels_video(query, filename="background.mp4"):
     return False
 
 
-def make_video(hook_text, audio_path, bg_path, output_path="final_video.mp4"):
+def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
+    # 1. Carica le clip
     video = VideoFileClip(bg_path)
-    audio = AudioFileClip(audio_path)
+    voice_audio = AudioFileClip(audio_path)
 
-    if video.duration < audio.duration:
-        video = video.loop(duration=audio.duration)
+    # --- NOVITÀ: MIXAGGIO MUSICA DI SOTTOFONDO ---
+    try:
+        # Carica la musica che hai messo su GitHub
+        bg_music = AudioFileClip("bg_music.mp3")
+        
+        # Se la musica è più corta della voce, la fa ripartire in loop
+        bg_music = bg_music.loop(duration=voice_audio.duration)
+        
+        # ABBASSA IL VOLUME al 15% per non coprire la voce
+        bg_music = bg_music.volumex(0.15)
+        
+        # Mixa la voce narrante e la musica
+        final_audio = CompositeAudioClip([voice_audio, bg_music])
+    except Exception as e:
+        print("File bg_music.mp3 non trovato, uso solo la voce.")
+        final_audio = voice_audio
+
+    # 2. Loop o Taglio del video di sfondo in base all'audio finale
+    if video.duration < final_audio.duration:
+        video = video.loop(duration=final_audio.duration)
     else:
-        video = video.subclip(0, audio.duration)
+        video = video.subclip(0, final_audio.duration)
 
-    video = video.set_audio(audio)
+    video = video.set_audio(final_audio)
 
-    txt_clip = TextClip(hook_text, fontsize=50, color='white', bg_color='black',
-                        font='Arial-Bold', method='caption', size=(video.w * 0.8, None))
-    txt_clip = txt_clip.set_position('center').set_duration(video.duration)
+    # 3. FORZATURA FORMATO TIKTOK (9:16)
+    target_ratio = 9 / 16
+    current_ratio = video.w / video.h
 
-    final_clip = CompositeVideoClip([video, txt_clip])
-    final_clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+    if current_ratio > target_ratio:
+        # Il video è troppo largo: tagliamo i lati
+        new_width = int(video.h * target_ratio)
+        video = video.crop(x_center=video.w/2, y_center=video.h/2, width=new_width, height=video.h)
+    else:
+        # Il video è troppo alto: tagliamo sopra e sotto
+        new_height = int(video.w / target_ratio)
+        video = video.crop(x_center=video.w/2, y_center=video.h/2, width=video.w, height=new_height)
+
+    # Ridimensioniamo in Full HD Verticale (Standard TikTok)
+    video = video.resize(newsize=(1080, 1920))
+
+    # 4. SOTTOTITOLI DINAMICI STILE "HORMOZI"
+    # Dividiamo l'intero copione in pezzetti veloci di 3 parole ciascuno
+    words = full_text.split()
+    chunk_size = 3
+    chunks = [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
+    
+    # Calcoliamo matematicamente quanto dura ogni parola in base all'audio totale
+    time_per_word = audio.duration / len(words)
+    
+    subtitle_clips = []
+    current_time = 0
+
+    for chunk_words in chunks:
+        chunk_text = " ".join(chunk_words)
+        chunk_duration = len(chunk_words) * time_per_word
+        
+        # Stile estetico da "gancio" per trattenere l'attenzione
+        txt_clip = TextClip(
+            chunk_text, 
+            fontsize=85,             # Testo gigante
+            color='yellow',          # Colore che salta all'occhio
+            font='Arial-Bold',       # Font spesso (di sistema su GitHub)
+            stroke_color='black',    # Contorno nero per renderlo leggibile su ogni sfondo
+            stroke_width=3.5,        # Spessore del contorno
+            method='caption', 
+            size=(900, None),        # Limita la larghezza per non uscire dai bordi
+            align='center'
+        )
+        
+        # Posizioniamo il testo perfettamente al centro (zona sicura di TikTok)
+        txt_clip = txt_clip.set_position('center') \
+                           .set_start(current_time) \
+                           .set_duration(chunk_duration)
+        
+        subtitle_clips.append(txt_clip)
+        current_time += chunk_duration
+
+    # 5. Composizione: Sovrapponiamo tutti i sottotitoli al video di sfondo
+    final_clip = CompositeVideoClip([video] + subtitle_clips)
+
+    # 6. ESPORTAZIONE AD ALTA QUALITA'
+    final_clip.write_videofile(
+        output_path, 
+        fps=30,                  # Fluido (prima era 24, scattoso per i social)
+        codec="libx264", 
+        audio_codec="aac",
+        bitrate="8000k",         # BITRATE ALTISSIMO: elimina l'effetto "schifoso" sgranato
+        preset="fast",           # Bilanciamento perfetto tra qualità e velocità per il Bot
+        threads=4                # Usa tutta la potenza del server GitHub
+    )
 
 
 # --- FLUSSO PRINCIPALE ---
@@ -97,7 +179,7 @@ def run():
 
             # Nuova sintassi per chiamare Gemini
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-3-flash-preview',
                 contents=prompt
             )
             script_data = json.loads(clean_json(response.text))
@@ -108,7 +190,7 @@ def run():
                 print("Video di sfondo scaricato da Pexels.")
                 asyncio.run(create_audio(script_data["voiceover"]))
                 print("Audio generato, inizio il montaggio...")
-                make_video(script_data["hook"], "audio.mp3", "background.mp4")
+                make_video(script_data["voiceover"], "audio.mp3", "background.mp4")
                 print("VIDEO FINITO CON SUCCESSO!")
             else:
                 print("Nessun video trovato su Pexels, salto la notizia.")
