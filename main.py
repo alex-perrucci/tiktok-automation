@@ -97,7 +97,7 @@ def run():
 
             # Nuova sintassi per chiamare Gemini
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-3-flash-preview',
                 contents=prompt
             )
             script_data = json.loads(clean_json(response.text))
