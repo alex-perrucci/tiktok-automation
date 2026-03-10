@@ -1,8 +1,9 @@
-name: Monitor Google Alerts
+name: Bot Generatore Video
+
 on:
   schedule:
-    - cron: '0 * * * *' # Gira ogni ora
-  workflow_dispatch: # Permette di avviarlo a mano per testare
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,20 +15,34 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
-      - name: Installa librerie
-        run: pip install feedparser google-generativeai
+      - name: Installa dipendenze di sistema (FFmpeg e ImageMagick)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg imagemagick
+          # Risolve un blocco di sicurezza di Ubuntu su ImageMagick
+          sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"//g' /etc/ImageMagick-6/policy.xml
 
-      - name: Esegui Script
+      - name: Installa librerie Python
+        run: pip install feedparser google-generativeai edge-tts moviepy requests
+
+      - name: Esegui Script Generazione
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: python main.py
 
-      - name: Salva progresso (Commit log)
+      - name: Salva Memoria (Commit links)
         run: |
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
           git add processed_links.txt
-          git commit -m "Update processed links" || exit 0
+          git commit -m "Notizia processata" || exit 0
           git push
+
+      - name: Salva il Video Finito come Artefatto
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-generato
+          path: final_video.mp4
