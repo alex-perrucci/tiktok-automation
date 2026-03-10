@@ -6,7 +6,7 @@ import requests
 import feedparser
 from google import genai  # <-- Il nuovo SDK ufficiale
 import edge_tts
-from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, CompositeAudioClip
 import PIL.Image
 if not hasattr(PIL.Image, 'ANTIALIAS'):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
@@ -61,18 +61,34 @@ def download_pexels_video(query, filename="background.mp4"):
 def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
     # 1. Carica le clip
     video = VideoFileClip(bg_path)
-    audio = AudioFileClip(audio_path)
+    voice_audio = AudioFileClip(audio_path)
 
-    # 2. Loop o Taglio del video di sfondo in base all'audio
-    if video.duration < audio.duration:
-        video = video.loop(duration=audio.duration)
+    # --- NOVITÀ: MIXAGGIO MUSICA DI SOTTOFONDO ---
+    try:
+        # Carica la musica che hai messo su GitHub
+        bg_music = AudioFileClip("bg_music.mp3")
+        
+        # Se la musica è più corta della voce, la fa ripartire in loop
+        bg_music = bg_music.loop(duration=voice_audio.duration)
+        
+        # ABBASSA IL VOLUME al 15% per non coprire la voce
+        bg_music = bg_music.volumex(0.15)
+        
+        # Mixa la voce narrante e la musica
+        final_audio = CompositeAudioClip([voice_audio, bg_music])
+    except Exception as e:
+        print("File bg_music.mp3 non trovato, uso solo la voce.")
+        final_audio = voice_audio
+
+    # 2. Loop o Taglio del video di sfondo in base all'audio finale
+    if video.duration < final_audio.duration:
+        video = video.loop(duration=final_audio.duration)
     else:
-        video = video.subclip(0, audio.duration)
+        video = video.subclip(0, final_audio.duration)
 
-    video = video.set_audio(audio)
+    video = video.set_audio(final_audio)
 
     # 3. FORZATURA FORMATO TIKTOK (9:16)
-    # Se Pexels ci dà un video non perfetto, noi lo ritagliamo e centriamo (Center Crop)
     target_ratio = 9 / 16
     current_ratio = video.w / video.h
 
