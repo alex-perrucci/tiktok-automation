@@ -55,10 +55,12 @@ def download_pexels_video(query, filename="background.mp4"):
     return False
 
 
-def make_video(hook_text, audio_path, bg_path, output_path="final_video.mp4"):
+def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
+    # 1. Carica le clip
     video = VideoFileClip(bg_path)
     audio = AudioFileClip(audio_path)
 
+    # 2. Loop o Taglio del video di sfondo in base all'audio
     if video.duration < audio.duration:
         video = video.loop(duration=audio.duration)
     else:
@@ -66,12 +68,73 @@ def make_video(hook_text, audio_path, bg_path, output_path="final_video.mp4"):
 
     video = video.set_audio(audio)
 
-    txt_clip = TextClip(hook_text, fontsize=50, color='white', bg_color='black',
-                        font='Arial-Bold', method='caption', size=(video.w * 0.8, None))
-    txt_clip = txt_clip.set_position('center').set_duration(video.duration)
+    # 3. FORZATURA FORMATO TIKTOK (9:16)
+    # Se Pexels ci dà un video non perfetto, noi lo ritagliamo e centriamo (Center Crop)
+    target_ratio = 9 / 16
+    current_ratio = video.w / video.h
 
-    final_clip = CompositeVideoClip([video, txt_clip])
-    final_clip.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+    if current_ratio > target_ratio:
+        # Il video è troppo largo: tagliamo i lati
+        new_width = int(video.h * target_ratio)
+        video = video.crop(x_center=video.w/2, y_center=video.h/2, width=new_width, height=video.h)
+    else:
+        # Il video è troppo alto: tagliamo sopra e sotto
+        new_height = int(video.w / target_ratio)
+        video = video.crop(x_center=video.w/2, y_center=video.h/2, width=video.w, height=new_height)
+
+    # Ridimensioniamo in Full HD Verticale (Standard TikTok)
+    video = video.resize(newsize=(1080, 1920))
+
+    # 4. SOTTOTITOLI DINAMICI STILE "HORMOZI"
+    # Dividiamo l'intero copione in pezzetti veloci di 3 parole ciascuno
+    words = full_text.split()
+    chunk_size = 3
+    chunks = [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
+    
+    # Calcoliamo matematicamente quanto dura ogni parola in base all'audio totale
+    time_per_word = audio.duration / len(words)
+    
+    subtitle_clips = []
+    current_time = 0
+
+    for chunk_words in chunks:
+        chunk_text = " ".join(chunk_words)
+        chunk_duration = len(chunk_words) * time_per_word
+        
+        # Stile estetico da "gancio" per trattenere l'attenzione
+        txt_clip = TextClip(
+            chunk_text, 
+            fontsize=85,             # Testo gigante
+            color='yellow',          # Colore che salta all'occhio
+            font='Arial-Bold',       # Font spesso (di sistema su GitHub)
+            stroke_color='black',    # Contorno nero per renderlo leggibile su ogni sfondo
+            stroke_width=3.5,        # Spessore del contorno
+            method='caption', 
+            size=(900, None),        # Limita la larghezza per non uscire dai bordi
+            align='center'
+        )
+        
+        # Posizioniamo il testo perfettamente al centro (zona sicura di TikTok)
+        txt_clip = txt_clip.set_position('center') \
+                           .set_start(current_time) \
+                           .set_duration(chunk_duration)
+        
+        subtitle_clips.append(txt_clip)
+        current_time += chunk_duration
+
+    # 5. Composizione: Sovrapponiamo tutti i sottotitoli al video di sfondo
+    final_clip = CompositeVideoClip([video] + subtitle_clips)
+
+    # 6. ESPORTAZIONE AD ALTA QUALITA'
+    final_clip.write_videofile(
+        output_path, 
+        fps=30,                  # Fluido (prima era 24, scattoso per i social)
+        codec="libx264", 
+        audio_codec="aac",
+        bitrate="8000k",         # BITRATE ALTISSIMO: elimina l'effetto "schifoso" sgranato
+        preset="fast",           # Bilanciamento perfetto tra qualità e velocità per il Bot
+        threads=4                # Usa tutta la potenza del server GitHub
+    )
 
 
 # --- FLUSSO PRINCIPALE ---
@@ -108,7 +171,7 @@ def run():
                 print("Video di sfondo scaricato da Pexels.")
                 asyncio.run(create_audio(script_data["voiceover"]))
                 print("Audio generato, inizio il montaggio...")
-                make_video(script_data["hook"], "audio.mp3", "background.mp4")
+                make_video(script_data["voiceover"], "audio.mp3", "background.mp4")
                 print("VIDEO FINITO CON SUCCESSO!")
             else:
                 print("Nessun video trovato su Pexels, salto la notizia.")
