@@ -1,0 +1,33 @@
+name: Monitor Google Alerts
+on:
+  schedule:
+    - cron: '0 * * * *' # Gira ogni ora
+  workflow_dispatch: # Permette di avviarlo a mano per testare
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Installa librerie
+        run: pip install feedparser google-generativeai
+
+      - name: Esegui Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
+
+      - name: Salva progresso (Commit log)
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add processed_links.txt
+          git commit -m "Update processed links" || exit 0
+          git push
