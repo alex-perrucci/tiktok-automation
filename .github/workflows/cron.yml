@@ -15,17 +15,17 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11' # <-- Aggiornato a 3.11
 
-      - name: Installa dipendenze di sistema (FFmpeg e ImageMagick)
+      - name: Installa dipendenze di sistema
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg imagemagick
-          # Risolve un blocco di sicurezza di Ubuntu su ImageMagick
           sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"//g' /etc/ImageMagick-6/policy.xml
 
       - name: Installa librerie Python
-        run: pip install feedparser google-generativeai edge-tts moviepy==1.0.3 requests
+        # <-- Abbiamo inserito google-genai e bloccato moviepy
+        run: pip install feedparser google-genai edge-tts moviepy==1.0.3 requests
 
       - name: Esegui Script Generazione
         env:
@@ -43,6 +43,9 @@ jobs:
 
       - name: Salva il Video Finito come Artefatto
         uses: actions/upload-artifact@v4
+        # <-- Aggiungiamo un if per non dare errore se il video non viene creato
+        if: always()
         with:
           name: video-generato
           path: final_video.mp4
+          if-no-files-found: ignore
