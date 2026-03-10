@@ -7,6 +7,9 @@ import feedparser
 from google import genai  # <-- Il nuovo SDK ufficiale
 import edge_tts
 from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+import PIL.Image
+if not hasattr(PIL.Image, 'ANTIALIAS'):
+    PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
 
 # --- CONFIGURAZIONI ---
 # Il nuovo SDK pesca in automatico la variabile d'ambiente GEMINI_API_KEY
