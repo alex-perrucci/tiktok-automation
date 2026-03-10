@@ -13,7 +13,7 @@ from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVide
 client = genai.Client()
 PEXELS_KEY = os.environ.get("PEXELS_API_KEY")
 
-RSS_URL = "INCOLLA_QUI_IL_TUO_LINK_FEED_RSS"  # <- Ricordati di rimettere il tuo link!
+RSS_URL = "https://www.google.it/alerts/feeds/01389272250505533510/7146043719198930595"  # <- Ricordati di rimettere il tuo link!
 LOG_FILE = "processed_links.txt"
 
 
