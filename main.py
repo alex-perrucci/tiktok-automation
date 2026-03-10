@@ -111,7 +111,7 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
     chunks = [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
     
     # Calcoliamo matematicamente quanto dura ogni parola in base all'audio totale
-    time_per_word = audio.duration / len(words)
+    time_per_word = voice_audio.duration / len(words)
     
     subtitle_clips = []
     current_time = 0
