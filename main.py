@@ -17,6 +17,8 @@ from moviepy.audio.fx.all import audio_loop, volumex
 # Il nuovo SDK pesca in automatico la variabile d'ambiente GEMINI_API_KEY
 client = genai.Client()
 PEXELS_KEY = os.environ.get("PEXELS_API_KEY")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 RSS_URL = "https://www.google.it/alerts/feeds/01389272250505533510/7146043719198930595"  # <- Ricordati di rimettere il tuo link!
 LOG_FILE = "processed_links.txt"
@@ -37,6 +39,20 @@ def clean_json(text):
     text = re.sub(r'```$', '', text, flags=re.MULTILINE)
     return text.strip()
 
+
+def send_telegram_video(video_path, caption="Ecco il tuo nuovo video pronto per i social! 🚀"):
+    print("Spedisco il video su Telegram...")
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendVideo"
+
+    with open(video_path, 'rb') as video_file:
+        payload = {'chat_id': TELEGRAM_CHAT_ID, 'caption': caption}
+        files = {'video': video_file}
+        response = requests.post(url, data=payload, files=files)
+
+    if response.status_code == 200:
+        print("✅ Video inviato con successo su Telegram!")
+    else:
+        print(f"❌ Errore nell'invio Telegram: {response.text}")
 
 async def create_audio(text, filename="audio.mp3"):
     voice = "it-IT-GiuseppeNeural"
@@ -208,6 +224,9 @@ def run():
                 print("Audio generato, inizio il montaggio...")
                 make_video(script_data["voiceover"], "audio.mp3", "background.mp4")
                 print("VIDEO FINITO CON SUCCESSO!")
+                # --- NUOVO STEP: INVIA SU TELEGRAM ---
+                send_telegram_video("final_video.mp4",
+                                    caption=f"Notizia: {entry.title}\n\nPronto per essere pubblicato! 📱")
             else:
                 print("Nessun video trovato su Pexels, salto la notizia.")
 
