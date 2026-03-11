@@ -2,11 +2,12 @@ import os
 import json
 import re
 import asyncio
+import math
 import requests
 import feedparser
 from google import genai  # <-- Il nuovo SDK ufficiale
 import edge_tts
-from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, CompositeAudioClip
+from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, CompositeAudioClip, ImageClip
 import PIL.Image
 if not hasattr(PIL.Image, 'ANTIALIAS'):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
@@ -64,20 +65,21 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
     video = VideoFileClip(bg_path)
     voice_audio = AudioFileClip(audio_path)
 
-    # --- NOVITÀ: MIXAGGIO MUSICA DI SOTTOFONDO ---
+    # --- MIXAGGIO MUSICA DI SOTTOFONDO ---
     try:
+        from moviepy.audio.fx.all import audio_loop, volumex
         print("Provo a caricare la musica di sottofondo...")
         bg_music = AudioFileClip("bg_music.mp3")
 
-        # Uso le funzioni fx specifiche per l'audio
+        # Faccio durare la musica quanto la voce
         bg_music = audio_loop(bg_music, duration=voice_audio.duration)
+        # Abbasso il volume al 15%
         bg_music = volumex(bg_music, 0.15)
 
         final_audio = CompositeAudioClip([voice_audio, bg_music])
         print("Musica mixata con successo!")
 
     except Exception as e:
-        # Ora se fallisce, ci dirà ESATTAMENTE perché!
         print(f"ATTENZIONE: Impossibile usare la musica. Errore reale: {e}")
         final_audio = voice_audio
 
@@ -94,68 +96,81 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
     current_ratio = video.w / video.h
 
     if current_ratio > target_ratio:
-        # Il video è troppo largo: tagliamo i lati
         new_width = int(video.h * target_ratio)
-        video = video.crop(x_center=video.w/2, y_center=video.h/2, width=new_width, height=video.h)
+        video = video.crop(x_center=video.w / 2, y_center=video.h / 2, width=new_width, height=video.h)
     else:
-        # Il video è troppo alto: tagliamo sopra e sotto
         new_height = int(video.w / target_ratio)
-        video = video.crop(x_center=video.w/2, y_center=video.h/2, width=video.w, height=new_height)
+        video = video.crop(x_center=video.w / 2, y_center=video.h / 2, width=video.w, height=new_height)
 
-    # Ridimensioniamo in Full HD Verticale (Standard TikTok)
     video = video.resize(newsize=(1080, 1920))
 
-    # 4. SOTTOTITOLI DINAMICI STILE "HORMOZI"
-    # Dividiamo l'intero copione in pezzetti veloci di 3 parole ciascuno
+    # --- NOVITÀ: AVATAR AL CENTRO (Trucco del Marketer) ---
+    try:
+        print("Provo a inserire l'Avatar (podcaster.png)...")
+        # Carichiamo l'immagine che hai scelto
+        avatar = ImageClip("podcaster.png")
+
+        # Rendiamo l'avatar bello grande (600 pixel di larghezza)
+        avatar = avatar.resize(width=600)
+        avatar = avatar.set_duration(video.duration)
+
+        # Animazione Respiro: Centro orizzontale ('center'),
+        # asse Y impostato a 750 (metà superiore) con un'oscillazione di 15 pixel
+        avatar = avatar.set_position(lambda t: ('center', 750 + 15 * math.sin(t * 3)))
+
+        avatar_layer = [avatar]
+        print("Avatar animato aggiunto con successo!")
+    except Exception as e:
+        print(f"Nessun avatar trovato. Errore: {e}")
+        avatar_layer = []
+
+    # 4. SOTTOTITOLI DINAMICI STILE "HORMOZI" (Spostati in basso)
     words = full_text.split()
     chunk_size = 3
     chunks = [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
-    
-    # Calcoliamo matematicamente quanto dura ogni parola in base all'audio totale
+
     time_per_word = voice_audio.duration / len(words)
-    
     subtitle_clips = []
     current_time = 0
 
     for chunk_words in chunks:
         chunk_text = " ".join(chunk_words)
         chunk_duration = len(chunk_words) * time_per_word
-        
-        # Stile estetico da "gancio" per trattenere l'attenzione
+
         txt_clip = TextClip(
-            chunk_text, 
-            fontsize=85,             # Testo gigante
-            color='yellow',          # Colore che salta all'occhio
-            font='Arial-Bold',       # Font spesso (di sistema su GitHub)
-            stroke_color='black',    # Contorno nero per renderlo leggibile su ogni sfondo
-            stroke_width=3.5,        # Spessore del contorno
-            method='caption', 
-            size=(900, None),        # Limita la larghezza per non uscire dai bordi
+            chunk_text,
+            fontsize=85,
+            color='yellow',
+            font='Arial-Bold',
+            stroke_color='black',
+            stroke_width=3.5,
+            method='caption',
+            size=(900, None),
             align='center'
         )
-        
-        # Posizioniamo il testo perfettamente al centro (zona sicura di TikTok)
-        txt_clip = txt_clip.set_position('center') \
-                           .set_start(current_time) \
-                           .set_duration(chunk_duration)
-        
+
+        # SPOSTATI IN BASSO: Invece di 'center' assoluto, li mettiamo alla coordinata Y=1350
+        # Così staranno esattamente sotto il podcaster senza coprirlo!
+        txt_clip = txt_clip.set_position(('center', 1350)) \
+            .set_start(current_time) \
+            .set_duration(chunk_duration)
+
         subtitle_clips.append(txt_clip)
         current_time += chunk_duration
 
-    # 5. Composizione: Sovrapponiamo tutti i sottotitoli al video di sfondo
-    final_clip = CompositeVideoClip([video] + subtitle_clips)
+    # 5. Composizione: Ordine esatto -> Sfondo, poi Avatar, poi Sottotitoli
+    final_clip = CompositeVideoClip([video] + avatar_layer + subtitle_clips)
 
     # 6. ESPORTAZIONE AD ALTA QUALITA'
     final_clip.write_videofile(
-        output_path, 
-        fps=30,                  # Fluido (prima era 24, scattoso per i social)
-        codec="libx264", 
+        output_path,
+        fps=30,
+        codec="libx264",
         audio_codec="aac",
-        bitrate="8000k",         # BITRATE ALTISSIMO: elimina l'effetto "schifoso" sgranato
-        preset="fast",           # Bilanciamento perfetto tra qualità e velocità per il Bot
-        threads=4                # Usa tutta la potenza del server GitHub
+        bitrate="8000k",
+        preset="fast",
+        threads=4
     )
-
 
 # --- FLUSSO PRINCIPALE ---
 def run():
