@@ -5,23 +5,25 @@ import asyncio
 import math
 import requests
 import feedparser
-from google import genai  # <-- Il nuovo SDK ufficiale
+from google import genai
 import edge_tts
-from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, CompositeAudioClip, ImageClip
+import numpy as np  # <-- Aggiunto per analizzare le onde audio
+from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, CompositeAudioClip, ImageClip, \
+    VideoClip
 import PIL.Image
+
 if not hasattr(PIL.Image, 'ANTIALIAS'):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
 from moviepy.audio.fx.all import audio_loop, volumex
 import time
 
 # --- CONFIGURAZIONI ---
-# Il nuovo SDK pesca in automatico la variabile d'ambiente GEMINI_API_KEY
 client = genai.Client()
 PEXELS_KEY = os.environ.get("PEXELS_API_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-RSS_URL = "https://www.ilpost.it/internet/feed/"  # <- Ricordati di rimettere il tuo link!
+RSS_URL = "https://www.ilpost.it/internet/feed/"
 LOG_FILE = "processed_links.txt"
 
 
@@ -55,9 +57,12 @@ def send_telegram_video(video_path, caption="Ecco il tuo nuovo video pronto per 
     else:
         print(f"❌ Errore nell'invio Telegram: {response.text}")
 
+
+# --- VOCE VELOCIZZATA TIPO TIKTOK ---
 async def create_audio(text, filename="audio.mp3"):
-    voice = "it-IT-GiuseppeNeural"
-    communicate = edge_tts.Communicate(text, voice)
+    voice = "it-IT-DiegoNeural"  # Voce più dinamica di Giuseppe
+    # Aumento la velocità del 15% per dare più ritmo (fondamentale negli Shorts)
+    communicate = edge_tts.Communicate(text, voice, rate="+15%")
     await communicate.save(filename)
 
 
@@ -78,8 +83,8 @@ def download_pexels_video(query, filename="background.mp4"):
 
 
 def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
-    # 1. Carica le clip
-    video = VideoFileClip(bg_path)
+    # 1. Carica le clip (Il video di sfondo viene velocizzato del 30% per meno noia visiva)
+    video = VideoFileClip(bg_path).speedx(1.3)
     voice_audio = AudioFileClip(audio_path)
 
     # --- MIXAGGIO MUSICA DI SOTTOFONDO ---
@@ -87,15 +92,10 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
         from moviepy.audio.fx.all import audio_loop, volumex
         print("Provo a caricare la musica di sottofondo...")
         bg_music = AudioFileClip("bg_music.mp3")
-
-        # Faccio durare la musica quanto la voce
         bg_music = audio_loop(bg_music, duration=voice_audio.duration)
-        # Abbasso il volume al 15%
         bg_music = volumex(bg_music, 0.15)
-
         final_audio = CompositeAudioClip([voice_audio, bg_music])
         print("Musica mixata con successo!")
-
     except Exception as e:
         print(f"ATTENZIONE: Impossibile usare la musica. Errore reale: {e}")
         final_audio = voice_audio
@@ -121,53 +121,70 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
 
     video = video.resize(newsize=(1080, 1920))
 
-    # --- NOVITÀ: AVATAR AL CENTRO (Trucco del Marketer) ---
+    # ==========================================
+    # 🌟 V2.0: AVATAR PNGTUBER AUDIO-REATTIVO + ZOOM
+    # ==========================================
     try:
-        print("Provo a inserire l'Avatar (podcaster.png)...")
-        # Carichiamo l'immagine che hai scelto
-        avatar = ImageClip("podcaster.png")
+        print("Genero l'Avatar Parlante V2.0...")
 
-        # Rendiamo l'avatar bello grande (600 pixel di larghezza)
-        avatar = avatar.resize(width=1050)
-        avatar = avatar.set_duration(video.duration)
+        # Carica facce aperte e chiuse
+        img_chiusa = ImageClip("avatar_chiuso.png").resize(width=900)
+        img_aperta = ImageClip("avatar_aperto.png").resize(width=900)
 
-        # Animazione Respiro: Centro orizzontale ('center'),
-        # asse Y impostato a 750 (metà superiore) con un'oscillazione di 15 pixel
-        avatar = avatar.set_position(lambda t: ('center', 820 + 15 * math.sin(t * 3)))
+        def seleziona_faccia(t):
+            try:
+                # Legge il volume in quel millisecondo
+                frame_audio = final_audio.get_frame(t)
+                volume = abs(frame_audio[0]) if isinstance(frame_audio, np.ndarray) else abs(frame_audio)
+                # Soglia del volume per aprire la bocca
+                if volume > 0.02:
+                    return img_aperta.get_frame(t)
+                else:
+                    return img_chiusa.get_frame(t)
+            except:
+                return img_chiusa.get_frame(t)
 
-        avatar_layer = [avatar]
-        print("Avatar animato aggiunto con successo!")
+        avatar_parlante = VideoClip(seleziona_faccia, duration=video.duration)
+
+        # Effetto Zoom (si ingrandisce lentamente)
+        avatar_parlante = avatar_parlante.resize(lambda t: 1 + 0.015 * t)
+
+        # Effetto fluttuazione in basso
+        avatar_parlante = avatar_parlante.set_position(lambda t: ('center', 820 + 15 * math.sin(t * 3)))
+
+        avatar_layer = [avatar_parlante]
+        print("Avatar Parlante generato con successo!")
     except Exception as e:
-        print(f"Nessun avatar trovato. Errore: {e}")
+        print(f"Errore Avatar: assicurati di avere avatar_chiuso.png e avatar_aperto.png. Errore: {e}")
         avatar_layer = []
 
-    # 4. SOTTOTITOLI DINAMICI STILE "HORMOZI" (Spostati in basso)
+    # ==========================================
+    # 🌟 V2.0: SOTTOTITOLI 1 PAROLA STILE CAPCUT (Colori Alternati)
+    # ==========================================
     words = full_text.split()
-    chunk_size = 3
-    chunks = [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
-
-    time_per_word = voice_audio.duration / len(words)
+    time_per_word = final_audio.duration / len(words)
     subtitle_clips = []
     current_time = 0
 
-    for chunk_words in chunks:
-        chunk_text = " ".join(chunk_words)
-        chunk_duration = len(chunk_words) * time_per_word
+    # Sequenza di colori ad alto impatto (Giallo, Bianco, Verde Fluo, Bianco)
+    colori_dinamici = ['yellow', 'white', '#00FF00', 'white']
+
+    for i, word in enumerate(words):
+        chunk_duration = time_per_word
+        colore_scelto = colori_dinamici[i % len(colori_dinamici)]
 
         txt_clip = TextClip(
-            chunk_text,
-            fontsize=85,
-            color='yellow',
+            word.upper(),  # Tutto maiuscolo per leggibilità immediata
+            fontsize=115,  # Carattere gigante per 1 parola
+            color=colore_scelto,
             font='Arial-Bold',
             stroke_color='black',
-            stroke_width=3.5,
+            stroke_width=5.0,  # Contorno spesso per staccare dal fondo
             method='caption',
-            size=(900, None),
+            size=(1000, None),
             align='center'
         )
 
-        # SPOSTATI IN BASSO: Invece di 'center' assoluto, li mettiamo alla coordinata Y=1350
-        # Così staranno esattamente sotto il podcaster senza coprirlo!
         txt_clip = txt_clip.set_position(('center', 1320)) \
             .set_start(current_time) \
             .set_duration(chunk_duration)
@@ -175,10 +192,10 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
         subtitle_clips.append(txt_clip)
         current_time += chunk_duration
 
-    # 5. Composizione: Ordine esatto -> Sfondo, poi Avatar, poi Sottotitoli
+    # 5. Composizione
     final_clip = CompositeVideoClip([video] + avatar_layer + subtitle_clips)
 
-    # 6. ESPORTAZIONE AD ALTA QUALITA'
+    # 6. ESPORTAZIONE
     final_clip.write_videofile(
         output_path,
         fps=30,
@@ -189,6 +206,7 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
         threads=4
     )
 
+
 # --- FLUSSO PRINCIPALE ---
 def run():
     feed = feedparser.parse(RSS_URL)
@@ -196,87 +214,84 @@ def run():
 
     notizie_trovate = 0
 
-    for entry in feed.entries:
+    # FILTRO PAROLE VIETATE GLOBALE
+    parole_vietate = ["offerte", "sconti", "amazon", "migliori", "recensione",
+                      "guerra", "morto", "morta", "suicidio", "autolesionismo", "violenza",
+                      "armi", "israele", "iran", "ucraina", "russia", "omicidio", "abusi",
+                      "calcio", "serie a", "linkedin"]
 
-        parole_vietate = ["offerte", "sconti", "amazon", "migliori", "recensione",
-                # Pericolose per l'algoritmo (Shadowban)
-                "guerra", "morto", "morta", "suicidio", "autolesionismo", "violenza",
-                "armi", "israele", "iran", "ucraina", "russia", "omicidio", "abusi",
-                # Fuori target
-                "calcio", "serie a", "linkedin"]
+    for entry in feed.entries:
         titolo_lower = entry.title.lower()
 
-        # Se trova una parola commerciale nel titolo, la salta per sempre
+        # 1. Controllo Spam/Ban
         if any(parola in titolo_lower for parola in parole_vietate):
-            print(f"🚫 Salto notizia commerciale: {entry.title}")
-            save_link(entry.link)  # La salva per non rianalizzarla più
-            continue
-        # ------------------------------
-        if entry.link not in processed:
-            notizie_trovate += 1
-            print(f"--- Lavoro sulla notizia: {entry.title} ---")
-
-            prompt = f"""
-                        Sei un content creator virale su TikTok e YouTube Shorts. Il tuo stile è diretto, sarcastico, emotivo e senza peli sulla lingua. Odii il linguaggio noioso da telegiornale o da Wikipedia.
-                        Analizza questa notizia: {entry.title} - {entry.summary}.
-
-                        Crea uno script dinamico e ritmato di circa 30 secondi (massimo 70-80 parole).
-
-                        REGOLE DI STILE:
-                        1. Tono: Sii sarcastico, indignato, scioccato o iper-entusiasta. Esprimi un'opinione forte sulla notizia. Parla come se stessi svelando uno scandalo a un amico.
-                        2. Linguaggio: Usa frasi brevi e taglienti. Dai sempre del "tu" o del "voi" allo spettatore. Usa parole a forte impatto emotivo (follia, assurdo, pazzesco, truffa, geniale).
-                        3. Chiusura: Il "voiceover" deve SEMPRE finire con una domanda provocatoria per far commentare la gente (es. "Voi che ne pensate?", "Siete d'accordo?", "Follia o genio? Fatemelo sapere sotto!").
-
-                        Restituisci SOLO ed ESCLUSIVAMENTE un JSON valido con questa esatta struttura, senza nient'altro:
-                        {{
-                          "hook": "Frase d'apertura super provocatoria e shock che blocca lo scroll (massimo 10 parole).",
-                          "voiceover": "Il testo completo da leggere ad alta voce. DEVE iniziare con la frase dell'hook e finire con la domanda provocatoria.",
-                          "search_term": "1 o 2 parole chiave in INGLESE per cercare il video di sfondo perfetto (es. 'hacker', 'money', 'angry', 'technology')."
-                        }}
-                        """
-
-            # Nuova sintassi per chiamare Gemini
-            # --- SISTEMA ANTI-CRASH GEMINI ---
-            massimo_tentativi = 3
-            for tentativo in range(massimo_tentativi):
-                try:
-                    response = client.models.generate_content(
-                        model='gemini-3-flash-preview',
-                        contents=prompt
-                    )
-                    break  # Se ha successo, esce dal ciclo di tentativi
-                except Exception as e:
-                    print(f"Errore Gemini (Tentativo {tentativo + 1}/{massimo_tentativi}): {e}")
-                    if tentativo < massimo_tentativi - 1:
-                        print("Aspetto 30 secondi e riprovo...")
-                        time.sleep(30)
-                    else:
-                        print("Gemini è intasato. Salto questa notizia per ora.")
-                        response = None
-
-            # Se dopo 3 tentativi Gemini è ancora bloccato, passiamo alla prossima notizia
-            if not response:
-                continue
-
-            script_data = json.loads(clean_json(response.text))
-            # -----------------------------------
-
-            print(f"Script generato! Cerco video per: {script_data['search_term']}")
-
-            if download_pexels_video(script_data['search_term']):
-                print("Video di sfondo scaricato da Pexels.")
-                asyncio.run(create_audio(script_data["voiceover"]))
-                print("Audio generato, inizio il montaggio...")
-                make_video(script_data["voiceover"], "audio.mp3", "background.mp4")
-                print("VIDEO FINITO CON SUCCESSO!")
-                # --- NUOVO STEP: INVIA SU TELEGRAM ---
-                send_telegram_video("final_video.mp4",
-                                    caption=f"Notizia: {entry.title}\n\nPronto per essere pubblicato! 📱")
-            else:
-                print("Nessun video trovato su Pexels, salto la notizia.")
-
+            print(f"🚫 Salto notizia commerciale o sensibile: {entry.title}")
             save_link(entry.link)
-            break
+            continue
+
+        # 2. Controllo Duplicati
+        if entry.link in processed:
+            continue
+
+        notizie_trovate += 1
+        print(f"--- Lavoro sulla notizia: {entry.title} ---")
+
+        prompt = f"""
+                    Sei un content creator virale su TikTok e YouTube Shorts. Il tuo stile è diretto, sarcastico, emotivo e senza peli sulla lingua. Odii il linguaggio noioso da telegiornale o da Wikipedia.
+                    Analizza questa notizia: {entry.title} - {entry.summary}.
+
+                    Crea uno script dinamico e ritmato di circa 30 secondi (massimo 70-80 parole).
+
+                    REGOLE DI STILE:
+                    1. Tono: Sii sarcastico, indignato, scioccato o iper-entusiasta. Esprimi un'opinione forte sulla notizia. Parla come se stessi svelando uno scandalo a un amico.
+                    2. Linguaggio: Usa frasi brevi e taglienti. Dai sempre del "tu" o del "voi" allo spettatore. Usa parole a forte impatto emotivo (follia, assurdo, pazzesco, truffa, geniale).
+                    3. Chiusura: Il "voiceover" deve SEMPRE finire con una domanda provocatoria per far commentare la gente (es. "Voi che ne pensate?", "Siete d'accordo?", "Follia o genio? Fatemelo sapere sotto!").
+
+                    Restituisci SOLO ed ESCLUSIVAMENTE un JSON valido con questa esatta struttura, senza nient'altro:
+                    {{
+                        "hook": "Frase d'apertura super provocatoria e shock che blocca lo scroll (massimo 10 parole).",
+                        "voiceover": "Il testo completo da leggere ad alta voce. DEVE iniziare con la frase dell'hook e finire con la domanda provocatoria.",
+                        "search_term": "1 o 2 parole chiave in INGLESE per cercare il video di sfondo perfetto (es. 'hacker', 'money', 'angry', 'technology')."
+                    }}
+                    """
+
+        # SISTEMA ANTI-CRASH GEMINI
+        massimo_tentativi = 3
+        for tentativo in range(massimo_tentativi):
+            try:
+                response = client.models.generate_content(
+                    model='gemini-3-flash-preview',
+                    contents=prompt
+                )
+                break
+            except Exception as e:
+                print(f"Errore Gemini (Tentativo {tentativo + 1}/{massimo_tentativi}): {e}")
+                if tentativo < massimo_tentativi - 1:
+                    print("Aspetto 30 secondi e riprovo...")
+                    time.sleep(30)
+                else:
+                    print("Gemini è intasato. Salto questa notizia per ora.")
+                    response = None
+
+        if not response:
+            continue
+
+        script_data = json.loads(clean_json(response.text))
+
+        print(f"Script generato! Cerco video per: {script_data['search_term']}")
+
+        if download_pexels_video(script_data['search_term']):
+            print("Video di sfondo scaricato da Pexels.")
+            asyncio.run(create_audio(script_data["voiceover"]))
+            print("Audio generato, inizio il montaggio...")
+            make_video(script_data["voiceover"], "audio.mp3", "background.mp4")
+            print("VIDEO FINITO CON SUCCESSO!")
+            send_telegram_video("final_video.mp4", caption=f"Notizia: {entry.title}\n\nPronto per essere pubblicato! 📱")
+        else:
+            print("Nessun video trovato su Pexels, salto la notizia.")
+
+        save_link(entry.link)
+        break  # Finito il primo video valido, esce dal loop
 
     if notizie_trovate == 0:
         print("NESSUNA NUOVA NOTIZIA NEL FEED. Nessun video generato in questo giro.")
