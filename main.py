@@ -21,7 +21,7 @@ PEXELS_KEY = os.environ.get("PEXELS_API_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-RSS_URL = "https://www.ansa.it/canale_scienza_tecnica/notizie/scienzaetecnica_rss.xml"  # <- Ricordati di rimettere il tuo link!
+RSS_URL = "https://www.ilpost.it/internet/feed/"  # <- Ricordati di rimettere il tuo link!
 LOG_FILE = "processed_links.txt"
 
 
@@ -198,8 +198,12 @@ def run():
 
     for entry in feed.entries:
 
-        parole_vietate = ["offerte", "sconti", "amazon", "migliori", "recensione", "regali", "black friday",
-                          "prime day", "coupon"]
+        parole_vietate = ["offerte", "sconti", "amazon", "migliori", "recensione",
+                # Pericolose per l'algoritmo (Shadowban)
+                "guerra", "morto", "morta", "suicidio", "autolesionismo", "violenza",
+                "armi", "israele", "iran", "ucraina", "russia", "omicidio", "abusi",
+                # Fuori target
+                "calcio", "serie a", "linkedin"]
         titolo_lower = entry.title.lower()
 
         # Se trova una parola commerciale nel titolo, la salta per sempre
