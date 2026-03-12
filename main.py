@@ -133,7 +133,7 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
 
         # Animazione Respiro: Centro orizzontale ('center'),
         # asse Y impostato a 750 (metà superiore) con un'oscillazione di 15 pixel
-        avatar = avatar.set_position(lambda t: ('center', 820 + 15 * math.sin(t * 3)))
+        avatar = avatar.set_position(lambda t: ('center', 1050 + 15 * math.sin(t * 3)))
 
         avatar_layer = [avatar]
         print("Avatar animato aggiunto con successo!")
@@ -168,7 +168,7 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
 
         # SPOSTATI IN BASSO: Invece di 'center' assoluto, li mettiamo alla coordinata Y=1350
         # Così staranno esattamente sotto il podcaster senza coprirlo!
-        txt_clip = txt_clip.set_position(('center', 1280)) \
+        txt_clip = txt_clip.set_position(('center', 1320)) \
             .set_start(current_time) \
             .set_duration(chunk_duration)
 
