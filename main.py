@@ -197,6 +197,17 @@ def run():
     notizie_trovate = 0
 
     for entry in feed.entries:
+
+        parole_vietate = ["offerte", "sconti", "amazon", "migliori", "recensione", "regali", "black friday",
+                          "prime day", "coupon"]
+        titolo_lower = entry.title.lower()
+
+        # Se trova una parola commerciale nel titolo, la salta per sempre
+        if any(parola in titolo_lower for parola in parole_vietate):
+            print(f"🚫 Salto notizia commerciale: {entry.title}")
+            save_link(entry.link)  # La salva per non rianalizzarla più
+            continue
+        # ------------------------------
         if entry.link not in processed:
             notizie_trovate += 1
             print(f"--- Lavoro sulla notizia: {entry.title} ---")
