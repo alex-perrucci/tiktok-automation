@@ -21,7 +21,7 @@ PEXELS_KEY = os.environ.get("PEXELS_API_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-RSS_URL = "https://www.wired.it/feed/rss"  # <- Ricordati di rimettere il tuo link!
+RSS_URL = "https://www.ansa.it/sito/notizie/scienza/scienza_rss.xml"  # <- Ricordati di rimettere il tuo link!
 LOG_FILE = "processed_links.txt"
 
 
