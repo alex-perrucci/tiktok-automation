@@ -20,7 +20,7 @@ PEXELS_KEY = os.environ.get("PEXELS_API_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-RSS_URL = "https://www.google.it/alerts/feeds/01389272250505533510/7146043719198930595"  # <- Ricordati di rimettere il tuo link!
+RSS_URL = "https://www.wired.it/feed/rss"  # <- Ricordati di rimettere il tuo link!
 LOG_FILE = "processed_links.txt"
 
 
@@ -127,12 +127,12 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
         avatar = ImageClip("podcaster.png")
 
         # Rendiamo l'avatar bello grande (600 pixel di larghezza)
-        avatar = avatar.resize(width=600)
+        avatar = avatar.resize(width=850)
         avatar = avatar.set_duration(video.duration)
 
         # Animazione Respiro: Centro orizzontale ('center'),
         # asse Y impostato a 750 (metà superiore) con un'oscillazione di 15 pixel
-        avatar = avatar.set_position(lambda t: ('center', 750 + 15 * math.sin(t * 3)))
+        avatar = avatar.set_position(lambda t: ('center', 820 + 15 * math.sin(t * 3)))
 
         avatar_layer = [avatar]
         print("Avatar animato aggiunto con successo!")
@@ -167,7 +167,7 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
 
         # SPOSTATI IN BASSO: Invece di 'center' assoluto, li mettiamo alla coordinata Y=1350
         # Così staranno esattamente sotto il podcaster senza coprirlo!
-        txt_clip = txt_clip.set_position(('center', 1350)) \
+        txt_clip = txt_clip.set_position(('center', 1280)) \
             .set_start(current_time) \
             .set_duration(chunk_duration)
 
@@ -201,13 +201,23 @@ def run():
             print(f"--- Lavoro sulla notizia: {entry.title} ---")
 
             prompt = f"""
-            Analizza la notizia: {entry.title} - {entry.summary}.
-            Crea uno script di 30 secondi.
-            Restituisci SOLO un JSON con:
-            "hook": Frase d'apertura breve e shock (max 10 parole).
-            "voiceover": Il testo completo da leggere ad alta voce (incluso l'hook).
-            "search_term": 1 o 2 parole chiave in INGLESE per cercare un video di sfondo (es. "technology", "space", "nature").
-            """
+                        Sei un content creator virale su TikTok e YouTube Shorts. Il tuo stile è diretto, sarcastico, emotivo e senza peli sulla lingua. Odii il linguaggio noioso da telegiornale o da Wikipedia.
+                        Analizza questa notizia: {entry.title} - {entry.summary}.
+
+                        Crea uno script dinamico e ritmato di circa 30 secondi (massimo 70-80 parole).
+
+                        REGOLE DI STILE:
+                        1. Tono: Sii sarcastico, indignato, scioccato o iper-entusiasta. Esprimi un'opinione forte sulla notizia. Parla come se stessi svelando uno scandalo a un amico.
+                        2. Linguaggio: Usa frasi brevi e taglienti. Dai sempre del "tu" o del "voi" allo spettatore. Usa parole a forte impatto emotivo (follia, assurdo, pazzesco, truffa, geniale).
+                        3. Chiusura: Il "voiceover" deve SEMPRE finire con una domanda provocatoria per far commentare la gente (es. "Voi che ne pensate?", "Siete d'accordo?", "Follia o genio? Fatemelo sapere sotto!").
+
+                        Restituisci SOLO ed ESCLUSIVAMENTE un JSON valido con questa esatta struttura, senza nient'altro:
+                        {{
+                          "hook": "Frase d'apertura super provocatoria e shock che blocca lo scroll (massimo 10 parole).",
+                          "voiceover": "Il testo completo da leggere ad alta voce. DEVE iniziare con la frase dell'hook e finire con la domanda provocatoria.",
+                          "search_term": "1 o 2 parole chiave in INGLESE per cercare il video di sfondo perfetto (es. 'hacker', 'money', 'angry', 'technology')."
+                        }}
+                        """
 
             # Nuova sintassi per chiamare Gemini
             response = client.models.generate_content(
