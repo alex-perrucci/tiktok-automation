@@ -128,12 +128,12 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
         avatar = ImageClip("podcaster.png")
 
         # Rendiamo l'avatar bello grande (600 pixel di larghezza)
-        avatar = avatar.resize(width=850)
+        avatar = avatar.resize(width=1050)
         avatar = avatar.set_duration(video.duration)
 
         # Animazione Respiro: Centro orizzontale ('center'),
         # asse Y impostato a 750 (metà superiore) con un'oscillazione di 15 pixel
-        avatar = avatar.set_position(lambda t: ('center', 1050 + 15 * math.sin(t * 3)))
+        avatar = avatar.set_position(lambda t: ('center', 820 + 15 * math.sin(t * 3)))
 
         avatar_layer = [avatar]
         print("Avatar animato aggiunto con successo!")
