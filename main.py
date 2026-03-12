@@ -12,6 +12,7 @@ import PIL.Image
 if not hasattr(PIL.Image, 'ANTIALIAS'):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
 from moviepy.audio.fx.all import audio_loop, volumex
+import time
 
 # --- CONFIGURAZIONI ---
 # Il nuovo SDK pesca in automatico la variabile d'ambiente GEMINI_API_KEY
@@ -220,11 +221,30 @@ def run():
                         """
 
             # Nuova sintassi per chiamare Gemini
-            response = client.models.generate_content(
-                model='gemini-3-flash-preview',
-                contents=prompt
-            )
+            # --- SISTEMA ANTI-CRASH GEMINI ---
+            massimo_tentativi = 3
+            for tentativo in range(massimo_tentativi):
+                try:
+                    response = client.models.generate_content(
+                        model='gemini-3-flash-preview',
+                        contents=prompt
+                    )
+                    break  # Se ha successo, esce dal ciclo di tentativi
+                except Exception as e:
+                    print(f"Errore Gemini (Tentativo {tentativo + 1}/{massimo_tentativi}): {e}")
+                    if tentativo < massimo_tentativi - 1:
+                        print("Aspetto 30 secondi e riprovo...")
+                        time.sleep(30)
+                    else:
+                        print("Gemini è intasato. Salto questa notizia per ora.")
+                        response = None
+
+            # Se dopo 3 tentativi Gemini è ancora bloccato, passiamo alla prossima notizia
+            if not response:
+                continue
+
             script_data = json.loads(clean_json(response.text))
+            # -----------------------------------
 
             print(f"Script generato! Cerco video per: {script_data['search_term']}")
 
