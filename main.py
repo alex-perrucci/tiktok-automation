@@ -5,6 +5,7 @@ import asyncio
 import math
 import requests
 import feedparser
+import random
 from google import genai
 import edge_tts
 import numpy as np  # <-- Aggiunto per analizzare le onde audio
@@ -23,7 +24,31 @@ PEXELS_KEY = os.environ.get("PEXELS_API_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-RSS_URL = "https://www.ilpost.it/internet/feed/"
+RSS_URLS = [
+    "https://www.ilpost.it/internet/feed/",
+    "https://www.google.it/alerts/feeds/01389272250505533510/7146043719198930595",
+    "https://www.google.it/alerts/feeds/01389272250505533510/18046864339030224203",
+    "https://www.google.it/alerts/feeds/01389272250505533510/8259819412184036855",
+    "https://www.google.it/alerts/feeds/01389272250505533510/14945071228994360231",
+    "https://www.google.it/alerts/feeds/01389272250505533510/14945071228994361854",
+    "https://www.google.it/alerts/feeds/01389272250505533510/5464753421936836102",
+    "https://www.google.it/alerts/feeds/01389272250505533510/3689173126201762454",
+    "https://www.google.it/alerts/feeds/01389272250505533510/1013462294344154884",
+    "https://www.google.it/alerts/feeds/01389272250505533510/13904276865364984014",
+    "https://www.google.it/alerts/feeds/01389272250505533510/13904276865364984014",
+    "https://www.google.it/alerts/feeds/01389272250505533510/13904276865364986900",
+    "https://www.google.it/alerts/feeds/01389272250505533510/1013462294344153198",
+    "https://www.google.it/alerts/feeds/01389272250505533510/11625453670672590453",
+    "https://www.google.it/alerts/feeds/01389272250505533510/5824630404075713593",
+    "https://www.google.it/alerts/feeds/01389272250505533510/17424155088677675112",
+    "https://www.google.it/alerts/feeds/01389272250505533510/17424155088677676098",
+    "https://www.google.it/alerts/feeds/01389272250505533510/4901070992315156615",
+    "https://www.google.it/alerts/feeds/01389272250505533510/1885785607556095889",
+    "https://www.google.it/alerts/feeds/01389272250505533510/1885785607556093508",
+    "https://www.google.it/alerts/feeds/01389272250505533510/3196451576645760734",
+    "https://www.google.it/alerts/feeds/01389272250505533510/1002976599006865477",
+    "https://www.google.it/alerts/feeds/01389272250505533510/13204700885184800141"
+    ]
 LOG_FILE = "processed_links.txt"
 
 
@@ -208,93 +233,116 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
 
 
 # --- FLUSSO PRINCIPALE ---
+# --- FLUSSO PRINCIPALE ---
 def run():
-    feed = feedparser.parse(RSS_URL)
     processed = get_processed_links()
-
     notizie_trovate = 0
+    video_generato = False  # Una bandierina per fermare il bot quando ha fatto 1 video
 
-    # FILTRO PAROLE VIETATE GLOBALE
-    parole_vietate = ["offerte", "sconti", "amazon", "migliori", "recensione",
-                      "guerra", "morto", "morta", "suicidio", "autolesionismo", "violenza",
-                      "armi", "israele", "iran", "ucraina", "russia", "omicidio", "abusi",
-                      "calcio", "serie a", "linkedin"]
+    # TRUCCO PRO: Mischiamo la lista dei feed ogni volta!
+    # Così il bot non pesca sempre prima dal primo feed della lista.
+    random.shuffle(RSS_URLS)
 
-    for entry in feed.entries:
-        titolo_lower = entry.title.lower()
+    for url_feed in RSS_URLS:
+        if video_generato:
+            break  # Se ha già fatto un video in questo giro, esce dai feed e si ferma
 
-        # 1. Controllo Spam/Ban
-        if any(parola in titolo_lower for parola in parole_vietate):
-            print(f"🚫 Salto notizia commerciale o sensibile: {entry.title}")
-            save_link(entry.link)
-            continue
+        print(f"\n📡 Controllo il feed: {url_feed}")
+        feed = feedparser.parse(url_feed)
 
-        # 2. Controllo Duplicati
-        if entry.link in processed:
-            continue
+        for entry in feed.entries:
+            if entry.link not in processed:
 
-        notizie_trovate += 1
-        print(f"--- Lavoro sulla notizia: {entry.title} ---")
+                # --- IL TUO FILTRO ANTI-SPAM E ANTI-BAN ---
+                parole_vietate = ["offerte", "sconti", "amazon", "migliori", "recensione", "guerra", "morto", "morta",
+                                  "suicidio", "violenza", "armi", "israele", "iran", "ucraina", "russia"]
+                titolo_lower = entry.title.lower()
 
-        prompt = f"""
-                    Sei un content creator virale su TikTok e YouTube Shorts. Il tuo stile è diretto, sarcastico, emotivo e senza peli sulla lingua. Odii il linguaggio noioso da telegiornale o da Wikipedia.
-                    Analizza questa notizia: {entry.title} - {entry.summary}.
+                if any(parola in titolo_lower for parola in parole_vietate):
+                    print(f"🚫 Salto notizia vietata: {entry.title}")
+                    save_link(entry.link)
+                    continue
+                # ------------------------------
 
-                    Crea uno script dinamico e ritmato di circa 30 secondi (massimo 70-80 parole).
+                notizie_trovate += 1
+                print(f"✅ TROVATA! Lavoro sulla notizia: {entry.title}")
 
-                    REGOLE DI STILE:
-                    1. Tono: Sii sarcastico, indignato, scioccato o iper-entusiasta. Esprimi un'opinione forte sulla notizia. Parla come se stessi svelando uno scandalo a un amico.
-                    2. Linguaggio: Usa frasi brevi e taglienti. Dai sempre del "tu" o del "voi" allo spettatore. Usa parole a forte impatto emotivo (follia, assurdo, pazzesco, truffa, geniale).
-                    3. Chiusura: Il "voiceover" deve SEMPRE finire con una domanda provocatoria per far commentare la gente (es. "Voi che ne pensate?", "Siete d'accordo?", "Follia o genio? Fatemelo sapere sotto!").
+                # === INIZIO BLOCCO GENERAZIONE VIDEO ===
+                prompt = f"""
+Sei un content creator virale su TikTok e YouTube Shorts. Il tuo stile è diretto, sarcastico, emotivo e senza peli sulla lingua. Odii il linguaggio noioso da telegiornale o da Wikipedia.
+Analizza questa notizia: {entry.title} - {entry.summary}.
 
-                    Restituisci SOLO ed ESCLUSIVAMENTE un JSON valido con questa esatta struttura, senza nient'altro:
-                    {{
-                        "hook": "Frase d'apertura super provocatoria e shock che blocca lo scroll (massimo 10 parole).",
-                        "voiceover": "Il testo completo da leggere ad alta voce. DEVE iniziare con la frase dell'hook e finire con la domanda provocatoria.",
-                        "search_term": "1 o 2 parole chiave in INGLESE per cercare il video di sfondo perfetto (es. 'hacker', 'money', 'angry', 'technology')."
-                    }}
-                    """
+Crea uno script dinamico e ritmato di circa 30 secondi (massimo 70-80 parole).
 
-        # SISTEMA ANTI-CRASH GEMINI
-        massimo_tentativi = 3
-        for tentativo in range(massimo_tentativi):
-            try:
-                response = client.models.generate_content(
-                    model='gemini-3-flash-preview',
-                    contents=prompt
-                )
-                break
-            except Exception as e:
-                print(f"Errore Gemini (Tentativo {tentativo + 1}/{massimo_tentativi}): {e}")
-                if tentativo < massimo_tentativi - 1:
-                    print("Aspetto 30 secondi e riprovo...")
-                    time.sleep(30)
+REGOLE DI STILE:
+1. Tono: Sii sarcastico, indignato, scioccato o iper-entusiasta. Esprimi un'opinione forte sulla notizia. Parla come se stessi svelando uno scandalo a un amico.
+2. Linguaggio: Usa frasi brevi e taglienti. Dai sempre del "tu" o del "voi" allo spettatore. Usa parole a forte impatto emotivo (follia, assurdo, pazzesco, truffa, geniale).
+3. Chiusura: Il "voiceover" deve SEMPRE finire con una domanda provocatoria per far commentare la gente (es. "Voi che ne pensate?", "Siete d'accordo?", "Follia o genio? Fatemelo sapere sotto!").
+
+Restituisci SOLO ed ESCLUSIVAMENTE un JSON valido con questa esatta struttura, senza nient'altro:
+{{
+    "hook": "Frase d'apertura super provocatoria e shock che blocca lo scroll (massimo 10 parole).",
+    "voiceover": "Il testo completo da leggere ad alta voce. DEVE iniziare con la frase dell'hook e finire con la domanda provocatoria.",
+    "search_term": "1 o 2 parole chiave in INGLESE per cercare il video di sfondo perfetto (es. 'hacker', 'money', 'angry', 'technology')."
+}}
+"""
+
+                # SISTEMA ANTI-CRASH GEMINI
+                massimo_tentativi = 3
+                response = None
+                for tentativo in range(massimo_tentativi):
+                    try:
+                        response = client.models.generate_content(
+                            model='gemini-3-flash-preview',
+                            contents=prompt
+                        )
+                        break
+                    except Exception as e:
+                        print(f"Errore Gemini (Tentativo {tentativo + 1}/{massimo_tentativi}): {e}")
+                        if tentativo < massimo_tentativi - 1:
+                            print("Aspetto 30 secondi e riprovo...")
+                            time.sleep(30)
+                        else:
+                            print("Gemini è intasato. Salto questa notizia per ora.")
+
+                if not response:
+                    continue  # Se Gemini fallisce, passa alla prossima notizia del feed
+
+                try:
+                    script_data = json.loads(clean_json(response.text))
+                except Exception as e:
+                    print(f"Errore nel trasformare la risposta in JSON: {e}")
+                    continue
+
+                print(f"Script generato! Cerco video per: {script_data['search_term']}")
+
+                if download_pexels_video(script_data['search_term']):
+                    print("Video di sfondo scaricato da Pexels.")
+                    asyncio.run(create_audio(script_data["voiceover"]))
+                    print("Audio generato, inizio il montaggio...")
+
+                    make_video(script_data["voiceover"], "audio.mp3", "background.mp4")
+
+                    print("VIDEO FINITO CON SUCCESSO!")
+                    send_telegram_video("final_video.mp4",
+                                        caption=f"Notizia: {entry.title}\n\nPronto per essere pubblicato! 📱")
                 else:
-                    print("Gemini è intasato. Salto questa notizia per ora.")
-                    response = None
+                    print("Nessun video trovato su Pexels, salto la notizia.")
 
-        if not response:
-            continue
+                # === FINE BLOCCO GENERAZIONE ===
 
-        script_data = json.loads(clean_json(response.text))
+                # Segna la notizia come fatta e alza la bandierina per fermare il bot
+                save_link(entry.link)
+                video_generato = True
+                break  # Esce dal ciclo delle notizie (ne basta 1)
 
-        print(f"Script generato! Cerco video per: {script_data['search_term']}")
-
-        if download_pexels_video(script_data['search_term']):
-            print("Video di sfondo scaricato da Pexels.")
-            asyncio.run(create_audio(script_data["voiceover"]))
-            print("Audio generato, inizio il montaggio...")
-            make_video(script_data["voiceover"], "audio.mp3", "background.mp4")
-            print("VIDEO FINITO CON SUCCESSO!")
-            send_telegram_video("final_video.mp4", caption=f"Notizia: {entry.title}\n\nPronto per essere pubblicato! 📱")
-        else:
-            print("Nessun video trovato su Pexels, salto la notizia.")
-
-        save_link(entry.link)
-        break  # Finito il primo video valido, esce dal loop
+        # Alla fine di ogni singolo feed, controllo se ho generato un video.
+        # Se sì, mi fermo e non controllo i prossimi feed (risparmio API)
+        if video_generato:
+            break
 
     if notizie_trovate == 0:
-        print("NESSUNA NUOVA NOTIZIA NEL FEED. Nessun video generato in questo giro.")
+        print("NESSUNA NUOVA NOTIZIA INTERESSANTE NEI FEED. Nessun video generato in questo giro.")
 
 
 if __name__ == "__main__":
