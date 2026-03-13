@@ -149,19 +149,22 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
     # ==========================================
     # 🌟 V2.0: AVATAR PNGTUBER AUDIO-REATTIVO + ZOOM
     # ==========================================
+    # ==========================================
+    # 🌟 V2.0: AVATAR PNGTUBER AUDIO-REATTIVO + ZOOM E RESPIRO FLUIDI
+    # ==========================================
     try:
         print("Genero l'Avatar Parlante V2.0...")
 
-        # Carica facce aperte e chiuse
-        img_chiusa = ImageClip("avatar_chiuso.png").resize(width=900)
-        img_aperta = ImageClip("avatar_aperto.png").resize(width=900)
+        # Carica facce e le fissa a una dimensione di base
+        img_chiusa = ImageClip("avatar_chiuso.png").resize(width=850)
+        img_aperta = ImageClip("avatar_aperto.png").resize(width=850)
 
         def seleziona_faccia(t):
             try:
-                # Legge il volume in quel millisecondo
+                # Legge il volume. Gestisce i casi in cui l'audio è mono o stereo
                 frame_audio = final_audio.get_frame(t)
                 volume = abs(frame_audio[0]) if isinstance(frame_audio, np.ndarray) else abs(frame_audio)
-                # Soglia del volume per aprire la bocca
+
                 if volume > 0.02:
                     return img_aperta.get_frame(t)
                 else:
@@ -169,16 +172,18 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
             except:
                 return img_chiusa.get_frame(t)
 
+        # 1. Crea il video base dell'avatar che muove solo la bocca
         avatar_parlante = VideoClip(seleziona_faccia, duration=video.duration)
 
-        # Effetto Zoom (si ingrandisce lentamente)
+        # 2. APPLICA LE ANIMAZIONI DI FLUIDITÀ IN MANIERA SICURA
+        # Ingrandisce lentamente dell'1.5% ogni secondo per creare ansia
         avatar_parlante = avatar_parlante.resize(lambda t: 1 + 0.015 * t)
 
-        # Effetto fluttuazione in basso
-        avatar_parlante = avatar_parlante.set_position(lambda t: ('center', 820 + 15 * math.sin(t * 3)))
+        # Fluttua al centro, leggermente in basso
+        avatar_parlante = avatar_parlante.set_position(lambda t: ('center', 1050 + 15 * math.sin(t * 3)))
 
         avatar_layer = [avatar_parlante]
-        print("Avatar Parlante generato con successo!")
+        print("Avatar Parlante generato e animato con successo!")
     except Exception as e:
         print(f"Errore Avatar: assicurati di avere avatar_chiuso.png e avatar_aperto.png. Errore: {e}")
         avatar_layer = []
