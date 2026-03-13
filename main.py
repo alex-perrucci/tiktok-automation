@@ -108,7 +108,7 @@ def download_pexels_video(query, filename="background.mp4"):
 
 
 def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
-    # 1. Carica le clip (Il video di sfondo viene velocizzato del 30% per meno noia visiva)
+    # 1. Carica le clip (Il video di sfondo viene velocizzato del 30%)
     video = VideoFileClip(bg_path).speedx(1.3)
     voice_audio = AudioFileClip(audio_path)
 
@@ -122,7 +122,7 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
         final_audio = CompositeAudioClip([voice_audio, bg_music])
         print("Musica mixata con successo!")
     except Exception as e:
-        print(f"ATTENZIONE: Impossibile usare la musica. Errore reale: {e}")
+        print(f"ATTENZIONE: Impossibile usare la musica. Usa solo la voce.")
         final_audio = voice_audio
 
     # 2. Loop o Taglio del video di sfondo in base all'audio finale
@@ -147,75 +147,76 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
     video = video.resize(newsize=(1080, 1920))
 
     # ==========================================
-    # 🌟 V2.0: AVATAR PNGTUBER AUDIO-REATTIVO + ZOOM
-    # ==========================================
-    # ==========================================
-    # 🌟 V2.0: AVATAR PNGTUBER AUDIO-REATTIVO + ZOOM E RESPIRO FLUIDI
+    # 🌟 V2.1: AVATAR FLUIDO E OTTIMIZZATO (Niente scatti!)
     # ==========================================
     try:
-        print("Genero l'Avatar Parlante V2.0...")
+        print("Genero l'Avatar Parlante FLUIDO...")
 
-        # Carica facce e le fissa a una dimensione di base
-        img_chiusa = ImageClip("avatar_chiuso.png").resize(width=850)
-        img_aperta = ImageClip("avatar_aperto.png").resize(width=850)
+        # Estraiamo i FRAME GREGZI una sola volta (100x più veloce per MoviePy)
+        frame_chiuso = ImageClip("avatar_chiuso.png").resize(width=850).get_frame(0)
+        frame_aperto = ImageClip("avatar_aperto.png").resize(width=850).get_frame(0)
 
         def seleziona_faccia(t):
             try:
-                # Legge il volume. Gestisce i casi in cui l'audio è mono o stereo
+                # Previene l'errore di fine clip
+                if t >= final_audio.duration:
+                    return frame_chiuso
+
+                # Legge il volume
                 frame_audio = final_audio.get_frame(t)
                 volume = abs(frame_audio[0]) if isinstance(frame_audio, np.ndarray) else abs(frame_audio)
 
-                if volume > 0.02:
-                    return img_aperta.get_frame(t)
+                # Soglia alzata a 0.05 per evitare aperture della bocca "a caso" col rumore di fondo
+                if volume > 0.05:
+                    return frame_aperto
                 else:
-                    return img_chiusa.get_frame(t)
+                    return frame_chiuso
             except:
-                return img_chiusa.get_frame(t)
+                return frame_chiuso
 
-        # 1. Crea il video base dell'avatar che muove solo la bocca
+        # Crea il video
         avatar_parlante = VideoClip(seleziona_faccia, duration=video.duration)
 
-        # 2. APPLICA LE ANIMAZIONI DI FLUIDITÀ IN MANIERA SICURA
-        # Ingrandisce lentamente dell'1.5% ogni secondo per creare ansia
-        avatar_parlante = avatar_parlante.resize(lambda t: 1 + 0.015 * t)
-
-        # Fluttua al centro, leggermente in basso
+        # Fluttua al centro (Rimosso lo zoom per garantire zero lag)
         avatar_parlante = avatar_parlante.set_position(lambda t: ('center', 1050 + 15 * math.sin(t * 3)))
 
         avatar_layer = [avatar_parlante]
-        print("Avatar Parlante generato e animato con successo!")
+        print("Avatar Parlante generato con successo!")
     except Exception as e:
-        print(f"Errore Avatar: assicurati di avere avatar_chiuso.png e avatar_aperto.png. Errore: {e}")
+        print(f"Errore Avatar: assicurati di avere le PNG. Errore: {e}")
         avatar_layer = []
 
     # ==========================================
-    # 🌟 V2.0: SOTTOTITOLI 1 PAROLA STILE CAPCUT (Colori Alternati)
+    # 🌟 V2.1: SOTTOTITOLI SINCRONIZZATI E SICURI
     # ==========================================
     words = full_text.split()
-    time_per_word = final_audio.duration / len(words)
+    # Calcoliamo il totale dei caratteri per dare il tempo giusto a ogni parola
+    total_chars = sum(len(word) for word in words)
     subtitle_clips = []
     current_time = 0
 
-    # Sequenza di colori ad alto impatto (Giallo, Bianco, Verde Fluo, Bianco)
     colori_dinamici = ['yellow', 'white', '#00FF00', 'white']
 
     for i, word in enumerate(words):
-        chunk_duration = time_per_word
+        # IL TRUCCO: La durata a schermo dipende da quante lettere ha la parola!
+        chunk_duration = final_audio.duration * (len(word) / total_chars)
+
         colore_scelto = colori_dinamici[i % len(colori_dinamici)]
 
         txt_clip = TextClip(
-            word.upper(),  # Tutto maiuscolo per leggibilità immediata
-            fontsize=115,  # Carattere gigante per 1 parola
+            word.upper(),
+            fontsize=95,  # Ridotto a 95 per non sbattere sui bordi del telefono
             color=colore_scelto,
             font='Arial-Bold',
             stroke_color='black',
-            stroke_width=5.0,  # Contorno spesso per staccare dal fondo
+            stroke_width=4.0,
             method='caption',
-            size=(1000, None),
+            size=(950, None),
             align='center'
         )
 
-        txt_clip = txt_clip.set_position(('center', 1320)) \
+        # Alzati leggermente a Y=1250 per non collidere col petto dell'avatar
+        txt_clip = txt_clip.set_position(('center', 1250)) \
             .set_start(current_time) \
             .set_duration(chunk_duration)
 
@@ -235,7 +236,6 @@ def make_video(full_text, audio_path, bg_path, output_path="final_video.mp4"):
         preset="fast",
         threads=4
     )
-
 
 # --- FLUSSO PRINCIPALE ---
 # --- FLUSSO PRINCIPALE ---
