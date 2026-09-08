@@ -340,7 +340,7 @@ def get_selected_score(editorial_package, source_id):
 
 
 def revise_script_for_duration(client, selected, current_duration):
-    direction = "expand" if current_duration < MIN_DURATION_SECONDS else "tighten"
+    direction = "expand" if current_duration < TARGET_DURATION_LOW else "tighten"
     target_words = "210 to 235" if direction == "expand" else "185 to 210"
     prompt = f"""
 Revise this English relationship-drama short voiceover. Keep the same premise, hook,
@@ -829,6 +829,14 @@ def run(args):
 
     selected = editorial_package["selected"]
     editorial_score = get_selected_score(editorial_package, selected.get("source_id"))
+    estimated_duration = estimate_duration_seconds(selected.get("voiceover", ""))
+    if estimated_duration < TARGET_DURATION_LOW or estimated_duration > TARGET_DURATION_HIGH:
+        print(f"Estimated script duration is {estimated_duration:.1f}s. Asking model for one timing revision before QC.")
+        revised_selected = revise_script_for_duration(client, selected, estimated_duration)
+        selected.update(revised_selected)
+        editorial_package["selected"] = selected
+        write_json(OUTPUT_DIR / "candidate_scores.json", editorial_package)
+
     qc_report = build_qc_report(selected, editorial_score)
     write_json(OUTPUT_DIR / "qc_report.json", qc_report)
 
@@ -866,9 +874,10 @@ def run(args):
     audio_duration = audio_clip.duration
     audio_clip.close()
 
-    if audio_duration < MIN_DURATION_SECONDS or audio_duration > TARGET_DURATION_HIGH + 8:
+    if audio_duration < TARGET_DURATION_LOW or audio_duration > TARGET_DURATION_HIGH:
         print(f"Voice-over duration is {audio_duration:.1f}s. Asking model for one timing revision.")
-        selected = revise_script_for_duration(client, selected, audio_duration)
+        revised_selected = revise_script_for_duration(client, selected, audio_duration)
+        selected.update(revised_selected)
         asyncio.run(create_audio(selected["voiceover"], audio_path))
         audio_clip = AudioFileClip(str(audio_path))
         audio_duration = audio_clip.duration
