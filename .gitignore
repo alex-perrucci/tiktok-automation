@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.env
+output/
+debug/
+*.mp4
+*.m4a
+*.wav
+audio.mp3
+voiceover.mp3
+background.mp4
