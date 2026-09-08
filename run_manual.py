@@ -240,6 +240,11 @@ def run(args):
         },
     )
 
+    # The renderer adds 40 ms of subtitle tail. Starting the next cue 60 ms
+    # after its word boundary guarantees the old cue is already gone instead
+    # of briefly overlapping the new one. Keep narration speed unchanged.
+    media_pipeline.SUBTITLE_LEAD_SECONDS = -0.06
+
     print("Rendering final vertical video with sequential background clips.")
     final_duration = media_pipeline.render_video(
         selected["voiceover"],
