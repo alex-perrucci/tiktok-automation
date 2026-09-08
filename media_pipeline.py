@@ -10,6 +10,120 @@ TARGET_SIZE = (1080, 1920)
 SEGMENT_MIN_SECONDS = 5.0
 SEGMENT_MAX_SECONDS = 8.0
 MAX_DOWNLOADED_CLIPS = 8
+SUBTITLE_LEAD_SECONDS = 0.06
+SUBTITLE_MAX_WORDS = 4
+SUBTITLE_MAX_CHARS = 24
+
+
+async def create_timed_audio(text, audio_path, voice, rate):
+    """Create Edge TTS audio and keep the exact WordBoundary events for subtitles."""
+    import edge_tts
+
+    audio_path = Path(audio_path)
+    boundaries = []
+    communicate = edge_tts.Communicate(text, voice, rate=rate)
+
+    with audio_path.open("wb") as audio_file:
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_file.write(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                boundaries.append(
+                    {
+                        "offset": int(chunk.get("offset") or 0),
+                        "duration": int(chunk.get("duration") or 0),
+                        "text": str(chunk.get("text") or "").strip(),
+                    }
+                )
+
+    if not audio_path.exists() or audio_path.stat().st_size == 0:
+        raise RuntimeError("Edge TTS produced no audio bytes")
+    if not boundaries:
+        print("Edge TTS returned no WordBoundary events; subtitle timing will use fallback estimation.")
+
+    return boundaries
+
+
+def _ticks_to_seconds(value):
+    # Edge TTS offsets/durations use 100-nanosecond ticks.
+    return float(value or 0) / 10_000_000.0
+
+
+def _group_word_boundaries(boundaries):
+    groups = []
+    current = []
+    char_count = 0
+
+    for boundary in boundaries:
+        word = str(boundary.get("text") or "").strip()
+        if not word:
+            continue
+
+        projected_chars = char_count + len(word) + (1 if current else 0)
+        if current and (
+            len(current) >= SUBTITLE_MAX_WORDS
+            or projected_chars > SUBTITLE_MAX_CHARS
+        ):
+            groups.append(current)
+            current = []
+            char_count = 0
+
+        current.append(boundary)
+        char_count += len(word) + (1 if len(current) > 1 else 0)
+
+    if current:
+        groups.append(current)
+
+    return groups
+
+
+def make_timed_subtitle_clips(boundaries, total_duration):
+    """Build subtitle clips from real TTS word timings, with a tiny visual lead."""
+    if not boundaries:
+        return []
+
+    import numpy as np
+    from moviepy.editor import ImageClip
+
+    import main
+
+    colors = [
+        (255, 255, 255, 255),
+        (255, 230, 109, 255),
+        (122, 231, 255, 255),
+    ]
+    clips = []
+
+    for index, group in enumerate(_group_word_boundaries(boundaries)):
+        text = " ".join(item["text"] for item in group).strip()
+        if not text:
+            continue
+
+        first = group[0]
+        last = group[-1]
+        start = max(
+            0.0,
+            _ticks_to_seconds(first["offset"]) - SUBTITLE_LEAD_SECONDS,
+        )
+        end = min(
+            total_duration,
+            _ticks_to_seconds(last["offset"])
+            + _ticks_to_seconds(last["duration"])
+            + 0.04,
+        )
+        duration = max(0.12, end - start)
+
+        image = main.render_text_image(text, colors[index % len(colors)])
+        clip = (
+            ImageClip(np.array(image))
+            .set_position(("center", 730))
+            .set_start(start)
+            .set_duration(duration)
+            .crossfadein(0.025)
+        )
+        clips.append(clip)
+
+    return clips
 
 
 def _fit_vertical(clip):
@@ -254,7 +368,14 @@ def build_background_sequence(paths, duration):
     return sequence, source_clips
 
 
-def render_video(full_text, audio_path, clip_paths, output_path, fallback_factory):
+def render_video(
+    full_text,
+    audio_path,
+    clip_paths,
+    output_path,
+    fallback_factory,
+    word_boundaries=None,
+):
     from moviepy.editor import AudioFileClip, ColorClip, CompositeVideoClip
 
     import main
@@ -267,7 +388,10 @@ def render_video(full_text, audio_path, clip_paths, output_path, fallback_factor
         print("Using local animated background fallback.")
         background = fallback_factory(duration)
     else:
-        print(f"Using multi-clip background sequence with {len(clip_paths)} downloaded source clips.")
+        print(
+            f"Using multi-clip background sequence with {len(clip_paths)} "
+            "downloaded source clips."
+        )
 
     background = background.set_audio(voice_audio)
     dark_overlay = (
@@ -275,7 +399,13 @@ def render_video(full_text, audio_path, clip_paths, output_path, fallback_factor
         .set_opacity(0.18)
         .set_duration(duration)
     )
-    subtitle_clips = main.make_subtitle_clips(full_text, duration)
+
+    if word_boundaries:
+        print("Using Edge TTS WordBoundary timestamps for subtitle sync.")
+        subtitle_clips = make_timed_subtitle_clips(word_boundaries, duration)
+    else:
+        print("Using estimated subtitle timing fallback.")
+        subtitle_clips = main.make_subtitle_clips(full_text, duration)
 
     # Intentionally no avatar/speaker layer: voice-over only.
     final_clip = CompositeVideoClip([background, dark_overlay, *subtitle_clips])
@@ -392,7 +522,12 @@ def _make_thumbnail_from_frame(frame, size, headline, subheadline, output_path):
 
     if subheadline:
         y += int(subheadline_size * 0.35)
-        bbox = draw.textbbox((0, 0), subheadline.upper(), font=subfont, stroke_width=3)
+        bbox = draw.textbbox(
+            (0, 0),
+            subheadline.upper(),
+            font=subfont,
+            stroke_width=3,
+        )
         width = bbox[2] - bbox[0]
         x = (size[0] - width) // 2
         draw.text(
@@ -414,18 +549,37 @@ def make_thumbnails(video_path, selected, output_dir):
     youtube_path = output_dir / "thumbnail_youtube.jpg"
     tiktok_path = output_dir / "thumbnail_tiktok.jpg"
 
-    headline = selected.get("thumbnail_text") or selected.get("title") or "RELATIONSHIP DRAMA"
+    headline = (
+        selected.get("thumbnail_text")
+        or selected.get("title")
+        or "RELATIONSHIP DRAMA"
+    )
     subheadline = selected.get("thumbnail_subtext") or ""
 
     clip = VideoFileClip(str(video_path))
     try:
-        sample_time = min(max(1.0, clip.duration * 0.12), max(0.0, clip.duration - 0.1))
+        sample_time = min(
+            max(1.0, clip.duration * 0.12),
+            max(0.0, clip.duration - 0.1),
+        )
         frame = clip.get_frame(sample_time)
     finally:
         clip.close()
 
-    _make_thumbnail_from_frame(frame, (1280, 720), headline, subheadline, youtube_path)
-    _make_thumbnail_from_frame(frame, (1080, 1920), headline, subheadline, tiktok_path)
+    _make_thumbnail_from_frame(
+        frame,
+        (1280, 720),
+        headline,
+        subheadline,
+        youtube_path,
+    )
+    _make_thumbnail_from_frame(
+        frame,
+        (1080, 1920),
+        headline,
+        subheadline,
+        tiktok_path,
+    )
     print(f"Created YouTube thumbnail: {youtube_path}")
     print(f"Created TikTok cover: {tiktok_path}")
     return youtube_path, tiktok_path
