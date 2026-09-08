@@ -21,6 +21,7 @@ on:
           - "true"
   push:
     branches:
+      - main
       - codex/relationship-manual-mvp
     paths:
       - input/manual_script.json
