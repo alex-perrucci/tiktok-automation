@@ -6,6 +6,7 @@ from pathlib import Path
 
 import main
 import media_pipeline
+import tts_pipeline
 
 
 DEFAULT_SCRIPT_PATH = Path(__file__).resolve().parent / "input" / "manual_script.json"
@@ -45,13 +46,14 @@ def _write_upload_copy(selected):
     return youtube_path, tiktok_path
 
 
-async def _create_voiceover(selected, audio_path, rate):
-    print(f"Creating English voice-over at {rate} speaking rate.")
-    return await media_pipeline.create_timed_audio(
+async def _create_voiceover(selected, audio_path, timing_path, rate):
+    print(f"Creating English voice-over at {rate} speaking rate with real word timings.")
+    return await tts_pipeline.create_audio_with_word_timings(
         selected["voiceover"],
         audio_path,
-        main.TTS_VOICE,
-        rate,
+        timing_path,
+        voice=main.TTS_VOICE,
+        rate=rate,
     )
 
 
@@ -170,17 +172,18 @@ def run(args):
         return 0
 
     audio_path = main.OUTPUT_DIR / "voiceover.mp3"
+    timing_path = main.OUTPUT_DIR / "subtitle_timings.json"
     video_path = main.OUTPUT_DIR / "final_video.mp4"
     background_dir = main.OUTPUT_DIR / "background_clips"
 
     requested_rate = os.environ.get("TTS_RATE") or DEFAULT_TTS_RATE
     word_boundaries = asyncio.run(
-        _create_voiceover(selected, audio_path, requested_rate)
+        _create_voiceover(selected, audio_path, timing_path, requested_rate)
     )
     audio_duration = _audio_duration(audio_path)
     final_rate = requested_rate
 
-    # Keep the narration energetic while adapting once if the real audio misses QC range.
+    # Keep narration energetic while adapting once if the real audio misses QC range.
     if audio_duration < main.TARGET_DURATION_LOW:
         retry_rate = "+14%"
         print(
@@ -188,7 +191,7 @@ def run(args):
             f"Retrying once at {retry_rate}."
         )
         word_boundaries = asyncio.run(
-            _create_voiceover(selected, audio_path, retry_rate)
+            _create_voiceover(selected, audio_path, timing_path, retry_rate)
         )
         audio_duration = _audio_duration(audio_path)
         final_rate = retry_rate
@@ -199,13 +202,14 @@ def run(args):
             f"Retrying once at {retry_rate}."
         )
         word_boundaries = asyncio.run(
-            _create_voiceover(selected, audio_path, retry_rate)
+            _create_voiceover(selected, audio_path, timing_path, retry_rate)
         )
         audio_duration = _audio_duration(audio_path)
         final_rate = retry_rate
 
     metadata["tts_rate"] = final_rate
     metadata["word_boundary_count"] = len(word_boundaries)
+    metadata["subtitle_timings_path"] = str(timing_path)
 
     qc_report = main.build_qc_report(
         selected,
@@ -291,6 +295,7 @@ def run(args):
     print(f"TikTok cover: {thumbnail_tiktok}")
     print(f"YouTube description: {youtube_description_path}")
     print(f"TikTok caption: {tiktok_caption_path}")
+    print(f"Subtitle timings: {timing_path}")
     return 0
 
 
