@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import os
 from pathlib import Path
 
 import main
@@ -8,6 +9,7 @@ import media_pipeline
 
 
 DEFAULT_SCRIPT_PATH = Path(__file__).resolve().parent / "input" / "manual_script.json"
+DEFAULT_TTS_RATE = "+20%"
 
 
 def parse_args():
@@ -25,6 +27,42 @@ def parse_args():
         help="Run script QC and write metadata without TTS/rendering.",
     )
     return parser.parse_args()
+
+
+def _write_upload_copy(selected):
+    youtube_description = str(selected.get("youtube_description") or "").strip()
+    tiktok_caption = str(selected.get("tiktok_caption") or "").strip()
+
+    if not youtube_description:
+        raise ValueError("selected.youtube_description is required")
+    if not tiktok_caption:
+        raise ValueError("selected.tiktok_caption is required")
+
+    youtube_path = main.OUTPUT_DIR / "youtube_description.txt"
+    tiktok_path = main.OUTPUT_DIR / "tiktok_caption.txt"
+    youtube_path.write_text(youtube_description + "\n", encoding="utf-8")
+    tiktok_path.write_text(tiktok_caption + "\n", encoding="utf-8")
+    return youtube_path, tiktok_path
+
+
+async def _create_voiceover(selected, audio_path, rate):
+    print(f"Creating English voice-over at {rate} speaking rate.")
+    return await media_pipeline.create_timed_audio(
+        selected["voiceover"],
+        audio_path,
+        main.TTS_VOICE,
+        rate,
+    )
+
+
+def _audio_duration(audio_path):
+    from moviepy.editor import AudioFileClip
+
+    audio_clip = AudioFileClip(str(audio_path))
+    try:
+        return audio_clip.duration
+    finally:
+        audio_clip.close()
 
 
 def run(args):
@@ -57,6 +95,14 @@ def run(args):
         )
         return 2
 
+    if not str(selected.get("youtube_description") or "").strip():
+        print("Manual script is missing selected.youtube_description.")
+        return 2
+
+    if not str(selected.get("tiktok_caption") or "").strip():
+        print("Manual script is missing selected.tiktok_caption.")
+        return 2
+
     main.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     candidate_scores = {
@@ -85,6 +131,12 @@ def run(args):
         )
         return 1
 
+    try:
+        youtube_description_path, tiktok_caption_path = _write_upload_copy(selected)
+    except ValueError as exc:
+        print(f"Upload copy validation failed: {exc}")
+        return 2
+
     metadata = {
         "generated_at": main.utc_now_iso(),
         "mode": "manual_test_script",
@@ -97,6 +149,10 @@ def run(args):
         "background_queries": background_queries,
         "thumbnail_text": selected.get("thumbnail_text"),
         "thumbnail_subtext": selected.get("thumbnail_subtext", ""),
+        "youtube_description": selected.get("youtube_description"),
+        "tiktok_caption": selected.get("tiktok_caption"),
+        "youtube_description_path": str(youtube_description_path),
+        "tiktok_caption_path": str(tiktok_caption_path),
         "status": "script_ready" if args.dry_run else "video_pending",
     }
     main.write_json(main.OUTPUT_DIR / "metadata.json", metadata)
@@ -117,14 +173,39 @@ def run(args):
     video_path = main.OUTPUT_DIR / "final_video.mp4"
     background_dir = main.OUTPUT_DIR / "background_clips"
 
-    print("Creating English voice-over from manual script.")
-    asyncio.run(main.create_audio(selected["voiceover"], audio_path))
+    requested_rate = os.environ.get("TTS_RATE") or DEFAULT_TTS_RATE
+    word_boundaries = asyncio.run(
+        _create_voiceover(selected, audio_path, requested_rate)
+    )
+    audio_duration = _audio_duration(audio_path)
+    final_rate = requested_rate
 
-    from moviepy.editor import AudioFileClip
+    # Keep the narration energetic while adapting once if the real audio misses QC range.
+    if audio_duration < main.TARGET_DURATION_LOW:
+        retry_rate = "+14%"
+        print(
+            f"Voice-over is {audio_duration:.1f}s, below target. "
+            f"Retrying once at {retry_rate}."
+        )
+        word_boundaries = asyncio.run(
+            _create_voiceover(selected, audio_path, retry_rate)
+        )
+        audio_duration = _audio_duration(audio_path)
+        final_rate = retry_rate
+    elif audio_duration > main.TARGET_DURATION_HIGH:
+        retry_rate = "+28%"
+        print(
+            f"Voice-over is {audio_duration:.1f}s, above target. "
+            f"Retrying once at {retry_rate}."
+        )
+        word_boundaries = asyncio.run(
+            _create_voiceover(selected, audio_path, retry_rate)
+        )
+        audio_duration = _audio_duration(audio_path)
+        final_rate = retry_rate
 
-    audio_clip = AudioFileClip(str(audio_path))
-    audio_duration = audio_clip.duration
-    audio_clip.close()
+    metadata["tts_rate"] = final_rate
+    metadata["word_boundary_count"] = len(word_boundaries)
 
     qc_report = main.build_qc_report(
         selected,
@@ -162,6 +243,7 @@ def run(args):
         clip_paths,
         video_path,
         main.make_motion_background,
+        word_boundaries=word_boundaries,
     )
 
     thumbnail_youtube, thumbnail_tiktok = media_pipeline.make_thumbnails(
@@ -207,6 +289,8 @@ def run(args):
     print(f"Ready for manual upload: {video_path}")
     print(f"YouTube thumbnail: {thumbnail_youtube}")
     print(f"TikTok cover: {thumbnail_tiktok}")
+    print(f"YouTube description: {youtube_description_path}")
+    print(f"TikTok caption: {tiktok_caption_path}")
     return 0
 
 
