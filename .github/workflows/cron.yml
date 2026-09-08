@@ -3,6 +3,14 @@ name: Generate manual short video
 on:
   workflow_dispatch:
     inputs:
+      use_manual_script:
+        description: "Use input/manual_script.json instead of RSS + Gemini"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
       dry_run:
         description: "Generate script/QC only, without rendering the video"
         required: false
@@ -11,6 +19,12 @@ on:
         options:
           - "false"
           - "true"
+  push:
+    branches:
+      - main
+      - codex/relationship-manual-mvp
+    paths:
+      - input/manual_script.json
 
 permissions:
   contents: write
@@ -35,16 +49,45 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Smoke test video stack
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from moviepy.editor import ColorClip
+
+          output = Path('/tmp/moviepy-smoke.mp4')
+          clip = ColorClip(size=(90, 160), color=(20, 30, 40), duration=0.2).resize((180, 320))
+          clip.write_videofile(
+              str(output),
+              fps=10,
+              codec='libx264',
+              audio=False,
+              logger=None,
+          )
+          clip.close()
+          assert output.exists() and output.stat().st_size > 0, 'MoviePy/ffmpeg smoke render failed'
+          print('MoviePy/Pillow/ffmpeg smoke render passed.')
+          PY
+
       - name: Generate package
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           USE_BG_MUSIC: ${{ vars.USE_BG_MUSIC }}
         run: |
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
+            python run_manual.py
+          elif [ "${{ inputs.use_manual_script }}" = "true" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              python run_manual.py --dry-run
+            else
+              python run_manual.py
+            fi
+          elif [ "${{ inputs.dry_run }}" = "true" ]; then
             python main.py --dry-run
           else
             python main.py --once
@@ -55,7 +98,9 @@ jobs:
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add processed_links.txt
+          if [ -f processed_links.txt ]; then
+            git add processed_links.txt
+          fi
           if [ -f videos_log.csv ]; then
             git add videos_log.csv
           fi
