@@ -49,8 +49,6 @@ def build_subtitle_cues(word_events):
 
     flush()
 
-    # Keep each cue visible through natural pauses, but end it just before the
-    # next spoken cue starts. This avoids the old subtitle drift/lag.
     for index, cue in enumerate(cues[:-1]):
         next_start = cues[index + 1]["start"]
         cue["end"] = max(cue["end"], next_start - 0.03)
@@ -79,23 +77,36 @@ async def create_audio_with_word_timings(
         boundary="WordBoundary",
     )
 
+    raw_boundaries = []
     word_events = []
     with audio_path.open("wb") as audio_file:
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio_file.write(chunk["data"])
             elif chunk["type"] == "WordBoundary":
-                start = _seconds(chunk.get("offset"))
-                duration = _seconds(chunk.get("duration"))
+                offset = int(chunk.get("offset") or 0)
+                duration = int(chunk.get("duration") or 0)
+                text_value = str(chunk.get("text") or "").strip()
+                raw_boundaries.append(
+                    {
+                        "offset": offset,
+                        "duration": duration,
+                        "text": text_value,
+                    }
+                )
+                start = _seconds(offset)
+                duration_seconds = _seconds(duration)
                 word_events.append(
                     {
-                        "text": str(chunk.get("text") or "").strip(),
+                        "text": text_value,
                         "start": round(start, 4),
-                        "end": round(start + duration, 4),
+                        "end": round(start + duration_seconds, 4),
                     }
                 )
 
-    if not word_events:
+    if not audio_path.exists() or audio_path.stat().st_size == 0:
+        raise RuntimeError("edge-tts produced no audio bytes")
+    if not raw_boundaries:
         raise RuntimeError("edge-tts returned audio without WordBoundary metadata")
 
     cues = build_subtitle_cues(word_events)
@@ -114,4 +125,4 @@ async def create_audio_with_word_timings(
         ),
         encoding="utf-8",
     )
-    return cues
+    return raw_boundaries
