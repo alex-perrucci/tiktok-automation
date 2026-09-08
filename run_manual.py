@@ -4,15 +4,26 @@ import json
 from pathlib import Path
 
 import main
+import media_pipeline
 
 
 DEFAULT_SCRIPT_PATH = Path(__file__).resolve().parent / "input" / "manual_script.json"
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Render a fixed relationship short through the production QC/video stack.")
-    parser.add_argument("--script-file", default=str(DEFAULT_SCRIPT_PATH), help="Path to the manual script JSON fixture.")
-    parser.add_argument("--dry-run", action="store_true", help="Run script QC and write metadata without TTS/rendering.")
+    parser = argparse.ArgumentParser(
+        description="Render a fixed relationship short through the production QC/video stack."
+    )
+    parser.add_argument(
+        "--script-file",
+        default=str(DEFAULT_SCRIPT_PATH),
+        help="Path to the manual script JSON fixture.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run script QC and write metadata without TTS/rendering.",
+    )
     return parser.parse_args()
 
 
@@ -27,6 +38,25 @@ def run(args):
     selected_source = package.get("source", {})
     editorial_score = float(package.get("editorial_score", 0))
 
+    background_queries = [
+        str(query).strip()
+        for query in selected.get("background_queries", [])
+        if str(query).strip()
+    ]
+    if not background_queries:
+        print(
+            "Manual script is missing selected.background_queries. "
+            "Daily script generation must provide the visual search plan."
+        )
+        return 2
+
+    if not selected.get("thumbnail_text"):
+        print(
+            "Manual script is missing selected.thumbnail_text. "
+            "Daily script generation must provide the thumbnail hook."
+        )
+        return 2
+
     main.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     candidate_scores = {
@@ -36,7 +66,10 @@ def run(args):
                 "id": selected.get("source_id", "manual-test"),
                 "overall_score": editorial_score,
                 "decision": "produce",
-                "reason": selected.get("editorial_reason", "Manual end-to-end test script."),
+                "reason": selected.get(
+                    "editorial_reason",
+                    "Manual end-to-end test script.",
+                ),
             }
         ],
         "selected": selected,
@@ -46,7 +79,10 @@ def run(args):
     qc_report = main.build_qc_report(selected, editorial_score)
     main.write_json(main.OUTPUT_DIR / "qc_report.json", qc_report)
     if not qc_report["auto_pass"]:
-        print("Manual script failed automatic QC before rendering. Review output/qc_report.json.")
+        print(
+            "Manual script failed automatic QC before rendering. "
+            "Review output/qc_report.json."
+        )
         return 1
 
     metadata = {
@@ -58,6 +94,9 @@ def run(args):
         "selected": selected,
         "editorial_score": editorial_score,
         "estimated_duration_seconds": qc_report["estimated_duration_seconds"],
+        "background_queries": background_queries,
+        "thumbnail_text": selected.get("thumbnail_text"),
+        "thumbnail_subtext": selected.get("thumbnail_subtext", ""),
         "status": "script_ready" if args.dry_run else "video_pending",
     }
     main.write_json(main.OUTPUT_DIR / "metadata.json", metadata)
@@ -66,14 +105,17 @@ def run(args):
         f"Manual script QC passed: {main.word_count(selected['voiceover'])} words, "
         f"~{qc_report['estimated_duration_seconds']:.1f}s estimated."
     )
+    print("Background queries:")
+    for query in background_queries:
+        print(f"  - {query}")
 
     if args.dry_run:
         print("Manual dry run complete.")
         return 0
 
     audio_path = main.OUTPUT_DIR / "voiceover.mp3"
-    bg_path = main.OUTPUT_DIR / "background.mp4"
     video_path = main.OUTPUT_DIR / "final_video.mp4"
+    background_dir = main.OUTPUT_DIR / "background_clips"
 
     print("Creating English voice-over from manual script.")
     asyncio.run(main.create_audio(selected["voiceover"], audio_path))
@@ -84,28 +126,61 @@ def run(args):
     audio_duration = audio_clip.duration
     audio_clip.close()
 
-    qc_report = main.build_qc_report(selected, editorial_score, actual_duration=audio_duration)
+    qc_report = main.build_qc_report(
+        selected,
+        editorial_score,
+        actual_duration=audio_duration,
+    )
     main.write_json(main.OUTPUT_DIR / "qc_report.json", qc_report)
     if not qc_report["auto_pass"]:
-        print(f"Manual voice-over duration/QC failed at {audio_duration:.1f}s. Review output/qc_report.json.")
+        print(
+            f"Manual voice-over duration/QC failed at {audio_duration:.1f}s. "
+            "Review output/qc_report.json."
+        )
         metadata["actual_duration_seconds"] = round(audio_duration, 2)
         metadata["status"] = "failed_qc"
         main.write_json(main.OUTPUT_DIR / "metadata.json", metadata)
         return 1
 
-    downloaded_bg = main.download_pexels_video(
-        selected.get("search_term", "couple relationship argument"),
-        bg_path,
+    print("Building stock-video pool from script-provided queries.")
+    clip_paths, background_manifest = media_pipeline.download_background_pool(
+        background_queries,
+        background_dir,
+    )
+    main.write_json(
+        main.OUTPUT_DIR / "background_manifest.json",
+        {
+            "queries": background_queries,
+            "clips": background_manifest,
+        },
     )
 
-    print("Rendering final vertical video from manual script.")
-    final_duration = main.make_video(selected["voiceover"], audio_path, downloaded_bg, video_path)
+    print("Rendering final vertical video with sequential background clips.")
+    final_duration = media_pipeline.render_video(
+        selected["voiceover"],
+        audio_path,
+        clip_paths,
+        video_path,
+        main.make_motion_background,
+    )
+
+    thumbnail_youtube, thumbnail_tiktok = media_pipeline.make_thumbnails(
+        video_path,
+        selected,
+        main.OUTPUT_DIR,
+    )
 
     metadata.update(
         {
             "status": "ready_for_manual_upload",
             "actual_duration_seconds": round(final_duration, 2),
+            "background_clip_count": len(clip_paths),
+            "background_manifest_path": str(
+                main.OUTPUT_DIR / "background_manifest.json"
+            ),
             "video_path": str(video_path),
+            "thumbnail_youtube_path": str(thumbnail_youtube),
+            "thumbnail_tiktok_path": str(thumbnail_tiktok),
             "metadata_path": str(main.OUTPUT_DIR / "metadata.json"),
             "qc_path": str(main.OUTPUT_DIR / "qc_report.json"),
         }
@@ -130,6 +205,8 @@ def run(args):
     )
 
     print(f"Ready for manual upload: {video_path}")
+    print(f"YouTube thumbnail: {thumbnail_youtube}")
+    print(f"TikTok cover: {thumbnail_tiktok}")
     return 0
 
 
