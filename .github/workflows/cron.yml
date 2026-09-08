@@ -19,6 +19,11 @@ on:
         options:
           - "false"
           - "true"
+  push:
+    branches:
+      - codex/relationship-manual-mvp
+    paths:
+      - input/manual_script.json
 
 permissions:
   contents: write
@@ -68,11 +73,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           USE_BG_MUSIC: ${{ vars.USE_BG_MUSIC }}
         run: |
-          if [ "${{ inputs.use_manual_script }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
+            python run_manual.py
+          elif [ "${{ inputs.use_manual_script }}" = "true" ]; then
             if [ "${{ inputs.dry_run }}" = "true" ]; then
               python run_manual.py --dry-run
             else
