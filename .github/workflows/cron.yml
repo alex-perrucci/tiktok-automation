@@ -1,53 +1,73 @@
-name: Bot Generatore Video
+name: Generate manual short video
 
 on:
-  schedule:
-    - cron: '0 * * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Generate script/QC only, without rendering the video"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del codice
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # <-- Aggiornato a 3.11
+          python-version: "3.11"
 
-      - name: Installa dipendenze di sistema
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg imagemagick
-          sudo sed -i 's/<policy domain="path" rights="none" pattern="@\*"//g' /etc/ImageMagick-6/policy.xml
+          sudo apt-get install -y ffmpeg
 
-      - name: Installa librerie Python
-        # <-- NOVITÀ: Aggiunti 'numpy' e 'pillow' indispensabili per far muovere la bocca all'Avatar
-        run: pip install feedparser google-genai edge-tts moviepy==1.0.3 requests numpy pillow
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
 
-      - name: Esegui Script Generazione
+      - name: Generate package
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python main.py
-
-      - name: Salva Memoria (Commit links)
+          USE_BG_MUSIC: ${{ vars.USE_BG_MUSIC }}
         run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python main.py --dry-run
+          else
+            python main.py --once
+          fi
+
+      - name: Save run state
+        if: ${{ success() && inputs.dry_run != 'true' }}
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
           git add processed_links.txt
-          git commit -m "Notizia processata" || exit 0
+          if [ -f videos_log.csv ]; then
+            git add videos_log.csv
+          fi
+          git diff --staged --quiet || git commit -m "Update short video run state"
           git push
 
-      - name: Salva il Video Finito come Artefatto
-        uses: actions/upload-artifact@v4
-        # <-- Aggiungiamo un if per non dare errore se il video non viene creato
+      - name: Upload manual package
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: video-generato
-          path: final_video.mp4
+          name: manual-upload-package
+          path: |
+            output/**
+            videos_log.csv
           if-no-files-found: ignore
