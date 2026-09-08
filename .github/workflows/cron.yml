@@ -35,6 +35,26 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Smoke test video stack
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from moviepy.editor import ColorClip
+
+          output = Path('/tmp/moviepy-smoke.mp4')
+          clip = ColorClip(size=(90, 160), color=(20, 30, 40), duration=0.2).resize((180, 320))
+          clip.write_videofile(
+              str(output),
+              fps=10,
+              codec='libx264',
+              audio=False,
+              logger=None,
+          )
+          clip.close()
+          assert output.exists() and output.stat().st_size > 0, 'MoviePy/ffmpeg smoke render failed'
+          print('MoviePy/Pillow/ffmpeg smoke render passed.')
+          PY
+
       - name: Generate package
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
