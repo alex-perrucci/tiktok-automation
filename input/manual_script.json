@@ -1,21 +1,21 @@
 {
-  "editorial_score": 8.8,
+  "editorial_score": 9.0,
   "source": {
-    "id": "manual-test-001",
+    "id": "daily-original-2026-09-09",
     "category": "relationship",
     "source_url": "",
-    "source_title": "Original manual test story",
-    "source_summary": "Synthetic relationship-drama story created for the first end-to-end render test."
+    "source_title": "Original daily relationship story",
+    "source_summary": "Fully original relationship-drama story created for the daily short package."
   },
   "selected": {
-    "source_id": "manual-test-001",
+    "source_id": "daily-original-2026-09-09",
     "category": "relationship",
-    "title": "His Ex Texted Me From His Phone",
-    "hook": "My boyfriend told me his ex was completely out of his life. Then she texted me from his phone.",
-    "voiceover": "My boyfriend told me his ex was completely out of his life. Then she texted me from his phone.\n\nWe'd been together almost two years, and he always said their breakup was messy but final. I believed him because he never hid his phone, never disappeared, never gave me a reason not to.\n\nLast Friday he said he was helping his brother move and would be gone most of the night. Around eleven, I got a message from his number: \"You should probably ask him where he actually is.\"\n\nI thought it was a joke. Then another message came through with a photo of him sitting on a couch next to his ex.\n\nShe told me he'd been coming over for weeks because they were \"trying to get closure.\" Apparently closure involved late-night conversations, deleting messages, and telling both of us completely different stories.\n\nWhen he finally came home, I didn't show him the photo. I just asked, \"How's your brother's new apartment?\"\n\nHe smiled and said, \"Exhausting, but we got everything moved.\"\n\nThat's when I put my phone on the table.\n\nHe went silent for maybe ten seconds, then said, \"It's not what it looks like.\"\n\nI packed a bag that night.\n\nNow he's begging me not to throw away two years over \"one stupid lie.\"\n\nWould you call this one lie?",
-    "youtube_description": "He swore his ex was completely out of his life. Then a message from his own phone exposed something that made the whole story fall apart. This relationship drama is about trust, hidden conversations, and the moment one lie becomes much bigger than it looked. Would you stay after this?\n\n#relationshipdrama #storytime #relationships #trust",
-    "tiktok_caption": "He said his ex was gone… then SHE texted me from his phone. One lie or instant breakup? 👀 #relationshipdrama #storytime #relationships #trust",
-    "caption": "He said his ex was out of his life. Then she texted me from his phone. #relationshipdrama #storytime #relationships #trust",
+    "title": "The Delivery Driver Exposed His Secret Apartment",
+    "hook": "I found out my boyfriend had a second apartment because his food delivery driver called me.",
+    "voiceover": "I found out my boyfriend had a second apartment because his food delivery driver called me.\n\nWe'd been together for three years, and for the last six months he kept saying work was getting brutal. Two late nights became four. Weekends started disappearing too.\n\nOn Saturday, while he was supposedly at the office, my phone rang. A delivery driver asked if I could buzz him into an apartment building across town. I said he had the wrong number.\n\nThen he read back my boyfriend's full name and said, \"You're the contact on the order.\"\n\nI drove there instead of calling him.\n\nHis car was outside.\n\nI waited across the street until he walked out carrying groceries with a woman I'd never seen. They weren't kissing. Honestly, that almost made it worse. They looked normal. Comfortable. Like they'd done this a hundred times.\n\nI called him while I was watching.\n\nHe answered and whispered, \"I'm still at work. I'll call you later.\"\n\nSo I said, \"No problem. I'm across the street.\"\n\nHe froze.\n\nApparently the apartment belonged to his \"friend,\" and he was only helping her because she was going through a breakup.\n\nHe says nothing physical ever happened.\n\nBut you don't need a second relationship to cheat, right? How would you even believe him after that?",
+    "youtube_description": "She thought his late nights were just work until one accidental food-delivery call pointed her to an apartment across town. What she saw there turned months of excuses into a completely different relationship story. Is emotional betrayal enough to end a three-year relationship?\n\n#relationshipdrama #storytime #relationships #trust",
+    "tiktok_caption": "A delivery driver accidentally exposed where her boyfriend REALLY was. Would you believe his excuse? 👀 #relationshipdrama #storytime #relationships #trust",
+    "caption": "One wrong delivery call exposed six months of lies. Would you believe him? #relationshipdrama #storytime #relationships #trust",
     "hashtags": [
       "#relationshipdrama",
       "#storytime",
@@ -23,17 +23,17 @@
       "#trust"
     ],
     "background_queries": [
-      "first person parkour night city",
-      "fast driving neon city POV",
-      "obstacle course running POV",
-      "satisfying kinetic motion tunnel",
-      "urban night walking POV phone",
-      "city parkour rooftops POV",
-      "fast tunnel motion POV"
+      "first person night city driving POV",
+      "urban parkour rooftops POV",
+      "fast tunnel driving POV night",
+      "obstacle course running first person",
+      "city streets walking POV night",
+      "satisfying kinetic motion lights",
+      "fast road motion POV"
     ],
-    "thumbnail_text": "HIS EX TEXTED ME",
-    "thumbnail_subtext": "FROM HIS PHONE",
-    "editorial_reason": "Immediate betrayal hook, escalating evidence, direct confrontation, clear consequence, and a natural debate question.",
-    "originality_note": "Fully synthetic story written for this channel test; it does not reproduce or adapt wording from a specific Reddit post."
+    "thumbnail_text": "HE HAD A SECRET APARTMENT",
+    "thumbnail_subtext": "A DELIVERY DRIVER EXPOSED IT",
+    "editorial_reason": "Immediate unusual discovery hook, escalating clues, visual confrontation, direct lie caught in real time, and a strong debate question about emotional cheating.",
+    "originality_note": "Fully original synthetic story created for this channel; it does not reproduce or adapt wording from Reddit or another source."
   }
 }
