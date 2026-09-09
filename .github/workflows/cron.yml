@@ -69,7 +69,7 @@ jobs:
           print('MoviePy/Pillow/ffmpeg smoke render passed.')
           PY
 
-      - name: Generate package
+      - name: Generate package and deliver to Telegram
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
@@ -93,20 +93,8 @@ jobs:
             python main.py --once
           fi
 
-      - name: Publish YouTube and upload TikTok draft
+      - name: Save run state
         if: ${{ success() && inputs.dry_run != 'true' }}
-        env:
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
-          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
-          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
-          GH_SECRETS_TOKEN: ${{ secrets.GH_SECRETS_TOKEN }}
-        run: python platform_uploads.py
-
-      - name: Save run and platform state
-        if: ${{ always() && inputs.dry_run != 'true' }}
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
@@ -115,9 +103,6 @@ jobs:
           fi
           if [ -f videos_log.csv ]; then
             git add videos_log.csv
-          fi
-          if [ -f platform_upload_state.json ]; then
-            git add platform_upload_state.json
           fi
           git diff --staged --quiet || git commit -m "Update short video run state"
           git push
