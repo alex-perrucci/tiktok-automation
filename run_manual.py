@@ -71,6 +71,24 @@ def _audio_duration(audio_path):
         audio_clip.close()
 
 
+def _rate_percent(rate):
+    value = str(rate or "0%").strip()
+    if value.endswith("%"):
+        value = value[:-1]
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
+def _adaptive_retry_rate(current_rate, actual_duration, target_duration):
+    current_factor = max(0.5, 1.0 + (_rate_percent(current_rate) / 100.0))
+    target_factor = current_factor * (float(actual_duration) / max(float(target_duration), 1.0))
+    target_percent = round((target_factor - 1.0) * 100)
+    target_percent = max(-20, min(40, target_percent))
+    return f"{target_percent:+d}%"
+
+
 def _telegram_config():
     token = (os.environ.get("TELEGRAM_TOKEN") or "").strip()
     chat_id = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
@@ -341,22 +359,24 @@ def run(args):
     audio_duration = _audio_duration(audio_path)
     final_rate = requested_rate
 
-    if audio_duration < main.TARGET_DURATION_LOW:
-        retry_rate = "+14%"
-        print(
-            f"Voice-over is {audio_duration:.1f}s, below target. "
-            f"Retrying once at {retry_rate}."
+    for retry_number in range(1, 3):
+        if main.TARGET_DURATION_LOW <= audio_duration <= main.TARGET_DURATION_HIGH:
+            break
+
+        if audio_duration < main.TARGET_DURATION_LOW:
+            target_duration = main.TARGET_DURATION_LOW + 1.5
+        else:
+            target_duration = main.TARGET_DURATION_HIGH - 2.0
+
+        retry_rate = _adaptive_retry_rate(
+            final_rate,
+            audio_duration,
+            target_duration,
         )
-        word_boundaries = asyncio.run(
-            _create_voiceover(selected, audio_path, timing_path, retry_rate)
-        )
-        audio_duration = _audio_duration(audio_path)
-        final_rate = retry_rate
-    elif audio_duration > main.TARGET_DURATION_HIGH:
-        retry_rate = "+28%"
         print(
-            f"Voice-over is {audio_duration:.1f}s, above target. "
-            f"Retrying once at {retry_rate}."
+            f"Voice-over is {audio_duration:.1f}s, outside target. "
+            f"Adaptive retry {retry_number}/2 at {retry_rate} "
+            f"for ~{target_duration:.1f}s."
         )
         word_boundaries = asyncio.run(
             _create_voiceover(selected, audio_path, timing_path, retry_rate)
