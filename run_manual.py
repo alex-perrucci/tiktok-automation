@@ -2,7 +2,10 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 from pathlib import Path
+
+import requests
 
 import main
 import media_pipeline
@@ -11,6 +14,7 @@ import tts_pipeline
 
 DEFAULT_SCRIPT_PATH = Path(__file__).resolve().parent / "input" / "manual_script.json"
 DEFAULT_TTS_RATE = "+20%"
+TELEGRAM_SOFT_LIMIT_BYTES = 48 * 1024 * 1024
 
 
 def parse_args():
@@ -65,6 +69,160 @@ def _audio_duration(audio_path):
         return audio_clip.duration
     finally:
         audio_clip.close()
+
+
+def _telegram_config():
+    token = (os.environ.get("TELEGRAM_TOKEN") or "").strip()
+    chat_id = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
+    if not token or not chat_id:
+        raise RuntimeError(
+            "Telegram delivery requires TELEGRAM_TOKEN and TELEGRAM_CHAT_ID."
+        )
+    return token, chat_id
+
+
+def _telegram_post(method, *, data=None, files=None, timeout=180):
+    token, chat_id = _telegram_config()
+    payload = {"chat_id": chat_id}
+    if data:
+        payload.update(data)
+    response = requests.post(
+        f"https://api.telegram.org/bot{token}/{method}",
+        data=payload,
+        files=files,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    body = response.json()
+    if not body.get("ok"):
+        raise RuntimeError(f"Telegram {method} failed: {body}")
+    return body
+
+
+def _prepare_telegram_video(video_path, duration):
+    if video_path.stat().st_size <= TELEGRAM_SOFT_LIMIT_BYTES:
+        return video_path
+
+    delivery_path = main.OUTPUT_DIR / "telegram_video.mp4"
+    safe_duration = max(float(duration), 1.0)
+    target_total_bps = int((45 * 1024 * 1024 * 8) / safe_duration)
+    audio_bps = 128_000
+    video_bps = max(1_600_000, min(4_200_000, target_total_bps - audio_bps))
+
+    print(
+        f"Video is {video_path.stat().st_size / 1024 / 1024:.1f} MB; "
+        "creating a Telegram-friendly delivery copy."
+    )
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-b:v",
+            str(video_bps),
+            "-maxrate",
+            str(video_bps),
+            "-bufsize",
+            str(video_bps * 2),
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
+            str(delivery_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    if delivery_path.stat().st_size > TELEGRAM_SOFT_LIMIT_BYTES:
+        print("Telegram delivery copy is still large; creating a 720x1280 fallback.")
+        fallback_path = main.OUTPUT_DIR / "telegram_video_720p.mp4"
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vf",
+                "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-b:v",
+                "2400k",
+                "-maxrate",
+                "2400k",
+                "-bufsize",
+                "4800k",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-movflags",
+                "+faststart",
+                str(fallback_path),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return fallback_path
+
+    return delivery_path
+
+
+def _send_telegram_package(selected, video_path, thumbnail_youtube, thumbnail_tiktok, duration):
+    title = str(selected.get("title") or "Relationship story").strip()
+    youtube_description = str(selected.get("youtube_description") or "").strip()
+    tiktok_caption = str(selected.get("tiktok_caption") or "").strip()
+
+    copy_message = (
+        f"DAILY SHORT READY\n\n"
+        f"TITLE\n{title}\n\n"
+        f"YOUTUBE DESCRIPTION\n{youtube_description}\n\n"
+        f"TIKTOK CAPTION\n{tiktok_caption}"
+    )
+    _telegram_post("sendMessage", data={"text": copy_message}, timeout=60)
+
+    delivery_video = _prepare_telegram_video(video_path, duration)
+    with delivery_video.open("rb") as handle:
+        _telegram_post(
+            "sendVideo",
+            data={
+                "caption": f"VIDEO — {title}",
+                "supports_streaming": "true",
+            },
+            files={"video": (delivery_video.name, handle, "video/mp4")},
+            timeout=600,
+        )
+
+    with Path(thumbnail_youtube).open("rb") as handle:
+        _telegram_post(
+            "sendDocument",
+            data={"caption": "YOUTUBE THUMBNAIL — 1280x720"},
+            files={"document": (Path(thumbnail_youtube).name, handle, "image/jpeg")},
+            timeout=120,
+        )
+
+    with Path(thumbnail_tiktok).open("rb") as handle:
+        _telegram_post(
+            "sendDocument",
+            data={"caption": "TIKTOK COVER — 1080x1920"},
+            files={"document": (Path(thumbnail_tiktok).name, handle, "image/jpeg")},
+            timeout=120,
+        )
+
+    print("Telegram delivery complete: copy, video, YouTube thumbnail, and TikTok cover sent.")
+    return delivery_video
 
 
 def run(args):
@@ -183,7 +341,6 @@ def run(args):
     audio_duration = _audio_duration(audio_path)
     final_rate = requested_rate
 
-    # Keep narration energetic while adapting once if the real audio misses QC range.
     if audio_duration < main.TARGET_DURATION_LOW:
         retry_rate = "+14%"
         print(
@@ -240,9 +397,6 @@ def run(args):
         },
     )
 
-    # The renderer adds 40 ms of subtitle tail. Starting the next cue 60 ms
-    # after its word boundary guarantees the old cue is already gone instead
-    # of briefly overlapping the new one. Keep narration speed unchanged.
     media_pipeline.SUBTITLE_LEAD_SECONDS = -0.06
 
     print("Rendering final vertical video with sequential background clips.")
@@ -263,7 +417,7 @@ def run(args):
 
     metadata.update(
         {
-            "status": "ready_for_manual_upload",
+            "status": "ready_for_telegram_delivery",
             "actual_duration_seconds": round(final_duration, 2),
             "background_clip_count": len(clip_paths),
             "background_manifest_path": str(
@@ -295,12 +449,32 @@ def run(args):
         }
     )
 
+    try:
+        telegram_video = _send_telegram_package(
+            selected,
+            video_path,
+            thumbnail_youtube,
+            thumbnail_tiktok,
+            final_duration,
+        )
+    except Exception as exc:
+        metadata["status"] = "telegram_delivery_failed"
+        metadata["telegram_error"] = str(exc)
+        main.write_json(main.OUTPUT_DIR / "metadata.json", metadata)
+        print(f"Telegram delivery failed: {exc}")
+        return 1
+
+    metadata["status"] = "delivered_to_telegram"
+    metadata["telegram_video_path"] = str(telegram_video)
+    main.write_json(main.OUTPUT_DIR / "metadata.json", metadata)
+
     print(f"Ready for manual upload: {video_path}")
     print(f"YouTube thumbnail: {thumbnail_youtube}")
     print(f"TikTok cover: {thumbnail_tiktok}")
     print(f"YouTube description: {youtube_description_path}")
     print(f"TikTok caption: {tiktok_caption_path}")
     print(f"Subtitle timings: {timing_path}")
+    print("Daily package delivered to Telegram for phone upload.")
     return 0
 
 
