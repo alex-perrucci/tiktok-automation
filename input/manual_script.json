@@ -1,40 +1,40 @@
 {
-  "editorial_score": 9.6,
+  "editorial_score": 9.5,
   "source": {
-    "id": "daily-original-2026-09-17-b",
+    "id": "daily-original-2026-09-18-a",
     "category": "relationship",
     "source_url": "",
     "source_title": "Original daily relationship story",
-    "source_summary": "Fully original relationship drama about a bride discovering that her fiance secretly told her sister she was banned from their wedding unless she apologized to his mother."
+    "source_summary": "Fully original relationship drama about a woman learning from a leasing agent that her boyfriend secretly rented a second apartment and had been presenting it as their future home."
   },
   "selected": {
-    "source_id": "daily-original-2026-09-17-b",
+    "source_id": "daily-original-2026-09-18-a",
     "category": "relationship",
-    "title": "My Sister Asked Why I Banned Her From My Wedding",
-    "hook": "My sister called crying and asked why I'd banned her from my wedding.",
-    "voiceover": "My sister called crying and asked why I'd banned her from my wedding. The problem was, I hadn't.\n\nOur wedding was six weeks away, and she'd been my maid of honor since the day we got engaged. She said my fiance had called her that morning and told her she was no longer invited unless she apologized to his mother.\n\nI thought she was joking.\n\nTwo weeks earlier, his mom had criticized my sister's dress at a family dinner. My sister told her, politely, to stop commenting on her body. It was awkward, but I thought it was over.\n\nApparently my fiance didn't.\n\nHe told my sister that his mom deserved respect, that I was too stressed to handle more drama, and that he'd made the decision for me.\n\nThen he asked her not to contact me until she was ready to apologize.\n\nWhen I confronted him, he said he was protecting our wedding from conflict.\n\nBut then my sister sent me screenshots.\n\nHe'd also messaged two of my cousins, warning them that anyone who upset his mother could lose their invitation.\n\nHe had basically created wedding rules in my name without telling me.\n\nI told him every invitation stays exactly as it is, and if anyone needs to reconsider attending, it's the person issuing secret ultimatums.\n\nNow he says I'm choosing my family over him before we're even married.\n\nWould you postpone the wedding after this, or is that going too far?",
-    "youtube_description": "Six weeks before her wedding, her maid-of-honor sister called in tears asking why she'd been banned from the ceremony. The bride had never banned her at all. A family disagreement quickly exposes secret wedding ultimatums, messages sent in the bride's name, and a much bigger fight over loyalty and control. Would you still walk down the aisle?\n\n#relationshipdrama #storytime #weddingdrama #familydrama #relationships",
-    "tiktok_caption": "Her sister was secretly BANNED from the wedding... by the groom. Then the screenshots arrived. 👀 #relationshipdrama #storytime #weddingdrama #familydrama",
-    "caption": "The groom secretly uninvited her maid of honor and blamed the bride. Then she learned her sister wasn't the only guest he'd threatened. #relationshipdrama #storytime #weddingdrama #familydrama",
+    "title": "The Leasing Agent Called About Our Second Apartment",
+    "hook": "A leasing agent called to ask when I wanted the keys to an apartment I'd never seen.",
+    "voiceover": "A leasing agent called to ask when I wanted the keys to an apartment I'd never seen.\n\nShe had my name, my phone number, and my boyfriend listed as the other tenant. We already lived together, so I assumed it was some weird mistake.\n\nThen she mentioned the building.\n\nFor months, my boyfriend had been showing me photos of that exact place, saying maybe we could afford something like it next year.\n\nI asked the agent when the application was submitted.\n\nThree weeks ago.\n\nWhen I called him, he admitted he'd rented it, but said it was supposed to be a surprise. Our current lease ends in four months, and apparently he'd decided we'd move early.\n\nThat sounded almost romantic until I asked how my name got on the application.\n\nHe'd uploaded copies of documents I'd sent him last year when we applied for our current apartment. He'd also paid the deposit from our joint emergency account.\n\nThen came the part that really bothered me.\n\nThe new apartment was forty minutes farther from my job, but five minutes from his.\n\nHe'd already measured our furniture, booked movers, and told his parents our moving date.\n\nEveryone knew except me.\n\nHe keeps saying he was trying to build our future and that I'm ruining a thoughtful surprise over paperwork.\n\nBut a surprise is dinner or a weekend away. This was a lease, our savings, and my commute decided without me.\n\nWould you forgive the intention, or is making a decision this big alone the real problem?",
+    "youtube_description": "A leasing agent calls about an apartment she never applied for, only to reveal that her boyfriend has been planning their move in secret. What first sounds like an elaborate romantic surprise quickly becomes a relationship drama about shared savings, consent, commuting, and who gets to make major decisions for a couple. Would the intention matter to you?\n\n#relationshipdrama #storytime #movingdrama #trust #relationships",
+    "tiktok_caption": "He secretly rented their NEXT apartment and planned the whole move without telling her. Romantic or controlling? 👀 #relationshipdrama #storytime #movingdrama #trust",
+    "caption": "He planned their new apartment, spent their joint savings, and even booked movers before telling her. Surprise or massive boundary crossed? #relationshipdrama #storytime #movingdrama #trust",
     "hashtags": [
       "#relationshipdrama",
       "#storytime",
-      "#weddingdrama",
-      "#familydrama",
+      "#movingdrama",
+      "#trust",
       "#relationships"
     ],
     "background_queries": [
-      "first person city walking POV evening",
-      "urban parkour running POV",
-      "fast night driving city POV",
-      "hotel corridor walking POV",
+      "first person apartment hallway walking POV",
+      "urban parkour stair running POV",
+      "fast city driving POV evening",
+      "moving boxes apartment timelapse",
       "obstacle course running first person",
-      "kinetic escalator motion POV",
+      "kinetic escalator city motion POV",
       "fast tunnel lights driving POV"
     ],
-    "thumbnail_text": "HE BANNED MY SISTER",
-    "thumbnail_subtext": "FROM OUR WEDDING",
-    "editorial_reason": "A materially different wedding-control and family-interference conflict from the immediately recent shared-savings loan, dating-profile, secret relocation, secret recording, and cancelled-trip stories. The opening contradiction lands instantly, then escalates from one unexplained uninvitation to secret messages, impersonated authority, multiple threatened guests, and a direct pre-wedding loyalty conflict.",
+    "thumbnail_text": "HE RENTED IT WITHOUT ME",
+    "thumbnail_subtext": "EVERYONE ELSE KNEW",
+    "editorial_reason": "A materially different housing and unilateral-life-decision conflict from the recent wedding-family interference, shared-savings loan, dating-profile, secret relocation, secret recording, and cancelled-trip stories. The leasing-agent hook creates an immediate mystery, then escalates through reused documents, joint savings, a hidden commute tradeoff, booked movers, and the reveal that both families knew before the person expected to move.",
     "originality_note": "Fully original synthetic story created for this channel; it does not reproduce or adapt wording from Reddit or another source."
   }
 }
